@@ -71,7 +71,7 @@ impl GroupsWriter {
 	}
 
 	// Helper to increment the group by one.
-	pub fn append(&mut self, priority: u64) -> Result<GroupWriter, ServeError> {
+	pub fn append(&mut self, priority: u8) -> Result<GroupWriter, ServeError> {
 		self.create(Group {
 			group_id: self.next,
 			priority,
@@ -183,7 +183,7 @@ pub struct Group {
 	pub group_id: u64,
 
 	// The priority of the group within the track.
-	pub priority: u64,
+	pub priority: u8,
 }
 
 /// Static information about the group
@@ -196,7 +196,7 @@ pub struct GroupInfo {
 	pub group_id: u64,
 
 	// The priority of the group within the track.
-	pub priority: u64,
+	pub priority: u8,
 }
 
 impl GroupInfo {

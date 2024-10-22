@@ -60,9 +60,9 @@ macro_rules! header_types {
 				}
 			}
 
-			pub fn send_order(&self) -> u64 {
+			pub fn publisher_priority(&self) -> u8 {
 				match self {
-					$(Self::$name(o) => o.send_order,)*
+					$(Self::$name(o) => o.publisher_priority,)*
 				}
 			}
 		}

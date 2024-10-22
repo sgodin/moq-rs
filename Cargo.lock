@@ -1082,15 +1082,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-clock"
-version = "0.5.1"
+name = "moq-clock-ietf"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
  "env_logger",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tracing",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "moq-dir"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1108,7 +1108,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tracing",
@@ -1117,8 +1117,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-native"
-version = "0.4.0"
+name = "moq-native-ietf"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1140,7 +1140,7 @@ dependencies = [
 
 [[package]]
 name = "moq-pub"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1148,7 +1148,7 @@ dependencies = [
  "env_logger",
  "log",
  "moq-catalog",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "mp4",
  "rfc6381-codec",
@@ -1160,8 +1160,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-relay"
-version = "0.6.1"
+name = "moq-relay-ietf"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1172,7 +1172,7 @@ dependencies = [
  "hyper-serve",
  "log",
  "moq-api",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tower-http",
@@ -1183,13 +1183,13 @@ dependencies = [
 
 [[package]]
 name = "moq-sub"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
  "env_logger",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "mp4",
  "tokio",
@@ -1200,7 +1200,7 @@ dependencies = [
 
 [[package]]
 name = "moq-transport"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bytes",
  "futures",

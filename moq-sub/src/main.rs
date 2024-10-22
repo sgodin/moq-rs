@@ -4,7 +4,7 @@ use anyhow::Context;
 use clap::Parser;
 use url::Url;
 
-use moq_native::quic;
+use moq_native_ietf::quic;
 use moq_sub::media::Media;
 use moq_transport::serve::Tracks;
 
@@ -59,7 +59,7 @@ pub struct Config {
 
 	/// The TLS configuration.
 	#[command(flatten)]
-	pub tls: moq_native::tls::Args,
+	pub tls: moq_native_ietf::tls::Args,
 }
 
 fn moq_url(s: &str) -> Result<Url, String> {

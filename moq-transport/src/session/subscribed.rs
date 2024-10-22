@@ -169,7 +169,7 @@ impl Subscribed {
 		let header: data::Header = data::TrackHeader {
 			subscribe_id: self.msg.id,
 			track_alias: self.msg.track_alias,
-			send_order: track.priority,
+			publisher_priority: track.priority,
 		}
 		.into();
 
@@ -219,7 +219,7 @@ impl Subscribed {
 							subscribe_id: self.msg.id,
 							track_alias: self.msg.track_alias,
 							group_id: group.group_id,
-							send_order: group.priority,
+							publisher_priority: group.priority,
 						};
 
 						let publisher = self.publisher.clone();
@@ -300,7 +300,7 @@ impl Subscribed {
 							track_alias: self.msg.track_alias,
 							group_id: object.group_id,
 							object_id: object.object_id,
-							send_order: object.priority,
+							publisher_priority: object.priority,
 							object_status: object.status,
 
 						};
@@ -365,7 +365,7 @@ impl Subscribed {
 				track_alias: self.msg.track_alias,
 				group_id: datagram.group_id,
 				object_id: datagram.object_id,
-				send_order: datagram.priority,
+				publisher_priority: datagram.priority,
 				object_status: datagram.status,
 				payload: datagram.payload,
 			};

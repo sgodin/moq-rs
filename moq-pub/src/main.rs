@@ -6,7 +6,7 @@ use anyhow::Context;
 use clap::Parser;
 use tokio::io::AsyncReadExt;
 
-use moq_native::quic;
+use moq_native_ietf::quic;
 use moq_pub::Media;
 use moq_transport::{serve, session::Publisher};
 
@@ -36,7 +36,7 @@ pub struct Cli {
 
 	/// The TLS configuration.
 	#[command(flatten)]
-	pub tls: moq_native::tls::Args,
+	pub tls: moq_native_ietf::tls::Args,
 }
 
 #[tokio::main]
@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let tls = cli.tls.load()?;
 
-	let quic = quic::Endpoint::new(moq_native::quic::Config {
+	let quic = quic::Endpoint::new(moq_native_ietf::quic::Config {
 		bind: cli.bind,
 		tls: tls.clone(),
 	})?;

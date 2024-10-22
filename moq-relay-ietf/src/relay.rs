@@ -3,7 +3,7 @@ use std::net;
 use anyhow::Context;
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
-use moq_native::quic;
+use moq_native_ietf::quic;
 use url::Url;
 
 use crate::{Api, Consumer, Locals, Producer, Remotes, RemotesConsumer, RemotesProducer, Session};
@@ -13,7 +13,7 @@ pub struct RelayConfig {
 	pub bind: net::SocketAddr,
 
 	/// The TLS configuration.
-	pub tls: moq_native::tls::Config,
+	pub tls: moq_native_ietf::tls::Config,
 
 	/// Forward all announcements to the (optional) URL.
 	pub announce: Option<Url>,

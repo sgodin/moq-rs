@@ -1,4 +1,4 @@
-use moq_native::quic;
+use moq_native_ietf::quic;
 use std::net;
 use url::Url;
 
@@ -24,7 +24,7 @@ pub struct Cli {
 
 	/// The TLS configuration.
 	#[command(flatten)]
-	pub tls: moq_native::tls::Args,
+	pub tls: moq_native_ietf::tls::Args,
 
 	/// Publish the current time to the relay, otherwise only subscribe.
 	#[arg(long)]

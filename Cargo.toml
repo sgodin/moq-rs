@@ -1,13 +1,13 @@
 [workspace]
 members = [
 	"moq-transport",
-	"moq-relay",
+	"moq-relay-ietf",
 	"moq-pub",
 	"moq-sub",
 	"moq-api",
-	"moq-clock",
+	"moq-clock-ietf",
 	"moq-dir",
-	"moq-native",
+	"moq-native-ietf",
 	"moq-catalog",
 ]
 resolver = "2"

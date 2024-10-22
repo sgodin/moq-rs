@@ -70,7 +70,7 @@ impl TrackWriter {
 		Self { state, info }
 	}
 
-	pub fn stream(self, priority: u64) -> Result<StreamWriter, ServeError> {
+	pub fn stream(self, priority: u8) -> Result<StreamWriter, ServeError> {
 		let (writer, reader) = Stream {
 			track: self.info.clone(),
 			priority,

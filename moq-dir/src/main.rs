@@ -4,7 +4,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 
 use std::net;
 
-use moq_native::{quic, tls};
+use moq_native_ietf::{quic, tls};
 
 mod listing;
 mod listings;

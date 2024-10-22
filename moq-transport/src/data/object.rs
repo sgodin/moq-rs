@@ -48,8 +48,8 @@ pub struct ObjectHeader {
 	// The sequence number within the group.
 	pub object_id: u64,
 
-	// The send order, where **smaller** values are sent first.
-	pub send_order: u64,
+	// Publisher priority, where **smaller** values are sent first.
+	pub publisher_priority: u8,
 
 	// The object status
 	pub object_status: ObjectStatus,
@@ -62,7 +62,7 @@ impl Decode for ObjectHeader {
 			track_alias: u64::decode(r)?,
 			group_id: u64::decode(r)?,
 			object_id: u64::decode(r)?,
-			send_order: u64::decode(r)?,
+			publisher_priority: u8::decode(r)?,
 			object_status: ObjectStatus::decode(r)?,
 		})
 	}
@@ -74,7 +74,7 @@ impl Encode for ObjectHeader {
 		self.track_alias.encode(w)?;
 		self.group_id.encode(w)?;
 		self.object_id.encode(w)?;
-		self.send_order.encode(w)?;
+		self.publisher_priority.encode(w)?;
 		self.object_status.encode(w)?;
 
 		Ok(())

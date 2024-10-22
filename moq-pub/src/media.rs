@@ -328,15 +328,15 @@ impl Track {
 
 		// Otherwise make a new segment
 
-		// Compute the timestamp in milliseconds.
-		// Overflows after 583 million years, so we're fine.
-		let timestamp: u32 = fragment
+		let _timestamp: u32 = fragment
 			.timestamp(self.timescale)
 			.as_millis()
 			.try_into()
 			.context("timestamp too large")?;
-
-		let priority = u32::MAX.checked_sub(timestamp).context("priority too large")?.into();
+		// Prioritize each group equally for now
+		// (A u8 doesn't give us granularity for ms since epoch)
+		// TODO: Revisit post draft-05 prioritization
+		let priority: u8 = 127;
 
 		// Create a new segment.
 		let mut segment = self.track.append(priority)?;

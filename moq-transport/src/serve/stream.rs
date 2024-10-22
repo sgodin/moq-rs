@@ -9,7 +9,7 @@ use super::{ServeError, Track};
 #[derive(Debug, PartialEq, Clone)]
 pub struct Stream {
 	pub track: Arc<Track>,
-	pub priority: u64,
+	pub priority: u8,
 }
 
 impl Stream {
