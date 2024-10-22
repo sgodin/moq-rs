@@ -244,6 +244,20 @@ impl Encode for usize {
 	}
 }
 
+impl Encode for u8 {
+	/// Encode a varint to the given writer.
+	fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+		let var = VarInt::from(*self);
+		var.encode(w)
+	}
+}
+
+impl Decode for u8 {
+	fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+		Ok(r.get_u8())
+	}
+}
+
 impl Decode for usize {
 	fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
 		VarInt::decode(r).map(|v| v.into_inner() as usize)

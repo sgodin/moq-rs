@@ -14,6 +14,9 @@ pub struct Subscribe {
 	pub track_namespace: String,
 	pub track_name: String,
 
+	// Subscriber Priority
+	pub subscriber_priority: u8,
+
 	/// Filter type
 	pub filter_type: FilterType,
 
@@ -31,6 +34,8 @@ impl Decode for Subscribe {
 		let track_alias = u64::decode(r)?;
 		let track_namespace = String::decode(r)?;
 		let track_name = String::decode(r)?;
+
+		let subscriber_priority: u8 = u8::decode(r)?;
 
 		let filter_type = FilterType::decode(r)?;
 
@@ -79,6 +84,7 @@ impl Decode for Subscribe {
 			track_alias,
 			track_namespace,
 			track_name,
+			subscriber_priority,
 			filter_type,
 			start,
 			end,
@@ -93,6 +99,8 @@ impl Encode for Subscribe {
 		self.track_alias.encode(w)?;
 		self.track_namespace.encode(w)?;
 		self.track_name.encode(w)?;
+
+		self.subscriber_priority.encode(w)?;
 
 		self.filter_type.encode(w)?;
 

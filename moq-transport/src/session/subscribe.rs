@@ -47,6 +47,8 @@ impl Subscribe {
 			track_alias: id,
 			track_namespace: track.namespace.clone(),
 			track_name: track.name.clone(),
+			// TODO add prioritization logic on the publisher side
+			subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
 			filter_type: FilterType::LatestGroup,
 			// TODO add these to the publisher.
 			start: Some(SubscribePair {

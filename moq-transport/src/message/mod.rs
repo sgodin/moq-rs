@@ -15,6 +15,7 @@
 //!
 //! Messages sent by the subscriber:
 //! - [Subscribe]
+//! - [SubscribeUpdate]
 //! - [Unsubscribe]
 //! - [AnnounceOk]
 //! - [AnnounceError]
