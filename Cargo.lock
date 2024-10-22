@@ -1160,7 +1160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-relay"
+name = "moq-relay-ietf"
 version = "0.7.0"
 dependencies = [
  "anyhow",
