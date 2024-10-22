@@ -1,5 +1,5 @@
 [package]
-name = "moq-clock"
+name = "moq-clock-ietf"
 description = "CLOCK over QUIC"
 authors = ["Luke Curley"]
 repository = "https://github.com/kixelated/moq-rs"

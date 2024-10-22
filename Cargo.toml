@@ -5,7 +5,7 @@ members = [
 	"moq-pub",
 	"moq-sub",
 	"moq-api",
-	"moq-clock",
+	"moq-clock-ietf",
 	"moq-dir",
 	"moq-native-ietf",
 	"moq-catalog",

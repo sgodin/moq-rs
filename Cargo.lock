@@ -1082,7 +1082,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-clock"
+name = "moq-clock-ietf"
 version = "0.6.0"
 dependencies = [
  "anyhow",
