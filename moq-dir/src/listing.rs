@@ -66,7 +66,7 @@ impl ListingWriter {
 			None => self.track.take().unwrap().groups()?,
 		};
 
-		let priority = self.group.as_ref().map(|g| g.group_id + 1).unwrap_or(0);
+		let priority = 127;
 		let mut group = groups.append(priority)?;
 
 		let mut msg = BytesMut::new();
