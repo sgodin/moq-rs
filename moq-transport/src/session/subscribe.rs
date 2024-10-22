@@ -2,7 +2,7 @@ use std::ops;
 
 use crate::{
 	data,
-	message::{self, FilterType, SubscribeLocation, SubscribePair},
+	message::{self, FilterType, GroupOrder, SubscribeLocation, SubscribePair},
 	serve::{self, ServeError, TrackWriter, TrackWriterMode},
 };
 
@@ -49,6 +49,7 @@ impl Subscribe {
 			track_name: track.name.clone(),
 			// TODO add prioritization logic on the publisher side
 			subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
+			group_order: GroupOrder::Publisher, // defer to publisher send order
 			filter_type: FilterType::LatestGroup,
 			// TODO add these to the publisher.
 			start: Some(SubscribePair {

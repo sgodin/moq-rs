@@ -1,5 +1,6 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params};
 use crate::message::FilterType;
+use crate::message::GroupOrder;
 
 /// Sent by the subscriber to request all future objects for the given track.
 ///
@@ -16,6 +17,7 @@ pub struct Subscribe {
 
 	// Subscriber Priority
 	pub subscriber_priority: u8,
+	pub group_order: GroupOrder,
 
 	/// Filter type
 	pub filter_type: FilterType,
@@ -35,7 +37,8 @@ impl Decode for Subscribe {
 		let track_namespace = String::decode(r)?;
 		let track_name = String::decode(r)?;
 
-		let subscriber_priority: u8 = u8::decode(r)?;
+		let subscriber_priority = u8::decode(r)?;
+		let group_order = GroupOrder::decode(r)?;
 
 		let filter_type = FilterType::decode(r)?;
 
@@ -85,6 +88,7 @@ impl Decode for Subscribe {
 			track_namespace,
 			track_name,
 			subscriber_priority,
+			group_order,
 			filter_type,
 			start,
 			end,
@@ -101,6 +105,8 @@ impl Encode for Subscribe {
 		self.track_name.encode(w)?;
 
 		self.subscriber_priority.encode(w)?;
+
+		self.group_order.encode(w)?;
 
 		self.filter_type.encode(w)?;
 
