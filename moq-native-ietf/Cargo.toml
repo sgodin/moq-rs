@@ -1,5 +1,5 @@
 [package]
-name = "moq-native"
+name = "moq-native-ietf"
 description = "Media over QUIC - Helper library for native applications"
 authors = ["Luke Curley"]
 repository = "https://github.com/kixelated/moq-rs"

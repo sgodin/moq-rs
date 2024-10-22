@@ -9,7 +9,7 @@ use std::sync::Weak;
 use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::StreamExt;
-use moq_native::quic;
+use moq_native_ietf::quic;
 use moq_transport::serve::{Track, TrackReader, TrackWriter};
 use moq_transport::watch::State;
 use url::Url;

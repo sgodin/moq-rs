@@ -1090,7 +1090,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tracing",
@@ -1108,7 +1108,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tracing",
@@ -1117,7 +1117,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-native"
+name = "moq-native-ietf"
 version = "0.5.0"
 dependencies = [
  "anyhow",
@@ -1148,7 +1148,7 @@ dependencies = [
  "env_logger",
  "log",
  "moq-catalog",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "mp4",
  "rfc6381-codec",
@@ -1172,7 +1172,7 @@ dependencies = [
  "hyper-serve",
  "log",
  "moq-api",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "tokio",
  "tower-http",
@@ -1189,7 +1189,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "moq-native",
+ "moq-native-ietf",
  "moq-transport",
  "mp4",
  "tokio",

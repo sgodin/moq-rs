@@ -6,7 +6,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 pub struct WebConfig {
 	pub bind: net::SocketAddr,
-	pub tls: moq_native::tls::Config,
+	pub tls: moq_native_ietf::tls::Config,
 }
 
 // Run a HTTP server using Axum
