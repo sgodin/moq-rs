@@ -12,8 +12,8 @@ pub struct GroupHeader {
 	// The group sequence number
 	pub group_id: u64,
 
-	// The priority, where **smaller** values are sent first.
-	pub send_order: u64,
+	// Publisher priority, where **smaller** values are sent first.
+	pub publisher_priority: u8,
 }
 
 impl Decode for GroupHeader {
@@ -22,7 +22,7 @@ impl Decode for GroupHeader {
 			subscribe_id: u64::decode(r)?,
 			track_alias: u64::decode(r)?,
 			group_id: u64::decode(r)?,
-			send_order: u64::decode(r)?,
+			publisher_priority: u8::decode(r)?,
 		})
 	}
 }
@@ -32,7 +32,7 @@ impl Encode for GroupHeader {
 		self.subscribe_id.encode(w)?;
 		self.track_alias.encode(w)?;
 		self.group_id.encode(w)?;
-		self.send_order.encode(w)?;
+		self.publisher_priority.encode(w)?;
 
 		Ok(())
 	}

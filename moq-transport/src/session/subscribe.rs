@@ -152,7 +152,7 @@ impl SubscribeRecv {
 		let writer = self.writer.take().ok_or(ServeError::Done)?;
 
 		let stream = match writer {
-			TrackWriterMode::Track(init) => init.stream(header.send_order)?,
+			TrackWriterMode::Track(init) => init.stream(header.publisher_priority)?,
 			_ => return Err(ServeError::Mode),
 		};
 
@@ -172,7 +172,7 @@ impl SubscribeRecv {
 
 		let writer = groups.create(serve::Group {
 			group_id: header.group_id,
-			priority: header.send_order,
+			priority: header.publisher_priority,
 		})?;
 
 		self.writer = Some(groups.into());
@@ -192,7 +192,7 @@ impl SubscribeRecv {
 		let writer = objects.create(serve::Object {
 			group_id: header.group_id,
 			object_id: header.object_id,
-			priority: header.send_order,
+			priority: header.publisher_priority,
 		})?;
 
 		self.writer = Some(objects.into());
@@ -212,7 +212,7 @@ impl SubscribeRecv {
 		datagrams.write(serve::Datagram {
 			group_id: datagram.group_id,
 			object_id: datagram.object_id,
-			priority: datagram.send_order,
+			priority: datagram.publisher_priority,
 			status: datagram.object_status,
 			payload: datagram.payload,
 		})?;

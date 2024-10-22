@@ -15,8 +15,8 @@ pub struct Datagram {
 	// The object ID within the group.
 	pub object_id: u64,
 
-	// The priority, where **smaller** values are sent first.
-	pub send_order: u64,
+	// Publisher priority, where **smaller** values are sent first.
+	pub publisher_priority: u8,
 
 	// Object status
 	pub object_status: ObjectStatus,
@@ -31,7 +31,7 @@ impl Decode for Datagram {
 		let track_alias = u64::decode(r)?;
 		let group_id = u64::decode(r)?;
 		let object_id = u64::decode(r)?;
-		let send_order = u64::decode(r)?;
+		let publisher_priority = u8::decode(r)?;
 		let object_status = ObjectStatus::decode(r)?;
 		let payload = r.copy_to_bytes(r.remaining());
 
@@ -40,7 +40,7 @@ impl Decode for Datagram {
 			track_alias,
 			group_id,
 			object_id,
-			send_order,
+			publisher_priority,
 			object_status,
 			payload,
 		})
@@ -53,7 +53,7 @@ impl Encode for Datagram {
 		self.track_alias.encode(w)?;
 		self.group_id.encode(w)?;
 		self.object_id.encode(w)?;
-		self.send_order.encode(w)?;
+		self.publisher_priority.encode(w)?;
 		self.object_status.encode(w)?;
 		Self::encode_remaining(w, self.payload.len())?;
 		w.put_slice(&self.payload);

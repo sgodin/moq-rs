@@ -118,7 +118,7 @@ impl DatagramsReader {
 pub struct Datagram {
 	pub group_id: u64,
 	pub object_id: u64,
-	pub priority: u64,
+	pub priority: u8,
 	pub status: ObjectStatus,
 	pub payload: bytes::Bytes,
 }

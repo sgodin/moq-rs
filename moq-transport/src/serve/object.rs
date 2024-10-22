@@ -193,7 +193,7 @@ pub struct ObjectInfo {
 	pub object_id: u64,
 
 	// The priority of the stream.
-	pub priority: u64,
+	pub priority: u8,
 
 	// The object status
 	pub status: ObjectStatus,
@@ -227,7 +227,7 @@ pub struct Object {
 	pub object_id: u64,
 
 	// The priority of the stream.
-	pub priority: u64,
+	pub priority: u8,
 }
 
 struct ObjectState {
