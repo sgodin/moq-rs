@@ -2,7 +2,7 @@
 name = "moq-pub"
 description = "Media over QUIC"
 authors = ["Mike English", "Luke Curley"]
-repository = "https://github.com/kixelated/moq-rs"
+repository = "https://github.com/englishm/moq-rs"
 license = "MIT OR Apache-2.0"
 
 version = "0.8.0"

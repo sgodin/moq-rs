@@ -2,7 +2,7 @@
 name = "moq-api"
 description = "Media over QUIC"
 authors = ["Luke Curley"]
-repository = "https://github.com/kixelated/moq-rs"
+repository = "https://github.com/englishm/moq-rs"
 license = "MIT OR Apache-2.0"
 
 version = "0.2.1"
