@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/englishm/moq-rs/releases/tag/moq-native-ietf-v0.5.0) - 2024-10-23
+
+### Other
+
+- Update repository URLs for all crates
+- Rename crate
+
 ## [0.2.2](https://github.com/kixelated/moq-rs/compare/moq-native-v0.2.1...moq-native-v0.2.2) - 2024-07-24
 
 ### Other
