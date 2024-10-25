@@ -16,4 +16,4 @@ SCHEME="${SCHEME:-https}"
 # Combine the host and name into a URL.
 URL="${URL:-"$SCHEME://$ADDR"}"
 
-cargo run --bin moq-clock -- "$URL" "$@"
+cargo run --bin moq-clock-ietf -- "$URL" "$@"
