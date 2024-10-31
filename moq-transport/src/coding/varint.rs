@@ -245,10 +245,11 @@ impl Encode for usize {
 }
 
 impl Encode for u8 {
-	/// Encode a varint to the given writer.
+	/// Encode a u8 to the given writer.
 	fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-		let var = VarInt::from(*self);
-		var.encode(w)
+		let x = *self;
+		w.put_u8(x);
+		Ok(())
 	}
 }
 
