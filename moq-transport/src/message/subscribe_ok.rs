@@ -1,4 +1,5 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
+use crate::message::GroupOrder;
 
 /// Sent by the publisher to accept a Subscribe.
 #[derive(Clone, Debug)]
@@ -8,6 +9,9 @@ pub struct SubscribeOk {
 
 	/// The subscription will expire in this many milliseconds.
 	pub expires: Option<u64>,
+
+	// Order groups will be delivered in
+	pub group_order: GroupOrder,
 
 	/// The latest group and object for the track.
 	pub latest: Option<(u64, u64)>,
@@ -21,6 +25,8 @@ impl Decode for SubscribeOk {
 			expires => Some(expires),
 		};
 
+		let group_order = GroupOrder::decode(r)?;
+
 		Self::decode_remaining(r, 1)?;
 
 		let latest = match r.get_u8() {
@@ -29,7 +35,12 @@ impl Decode for SubscribeOk {
 			_ => return Err(DecodeError::InvalidValue),
 		};
 
-		Ok(Self { id, expires, latest })
+		Ok(Self {
+			id,
+			expires,
+			group_order,
+			latest,
+		})
 	}
 }
 
@@ -37,6 +48,8 @@ impl Encode for SubscribeOk {
 	fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
 		self.id.encode(w)?;
 		self.expires.unwrap_or(0).encode(w)?;
+
+		self.group_order.encode(w)?;
 
 		Self::encode_remaining(w, 1)?;
 

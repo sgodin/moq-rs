@@ -84,6 +84,7 @@ impl Subscribed {
 		self.publisher.send_message(message::SubscribeOk {
 			id: self.msg.id,
 			expires: None,
+			group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
 			latest,
 		});
 
