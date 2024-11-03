@@ -74,12 +74,11 @@ mod tests {
 	use crate::setup::Role;
 	use bytes::BytesMut;
 
-	// TODO: Update this test to use the draft 06 version
 	#[test]
 	fn encode_decode() {
 		let mut buf = BytesMut::new();
 		let client = Server {
-			version: Version::DRAFT_03,
+			version: Version::DRAFT_06,
 			role: Role::Both,
 			params: Params::default(),
 		};
@@ -87,7 +86,7 @@ mod tests {
 		client.encode(&mut buf).unwrap();
 		assert_eq!(
 			buf.to_vec(),
-			vec![0x40, 0x41, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x03, 0x01, 0x00, 0x01, 0x03]
+			vec![0x40, 0x41, 0x0C, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x06, 0x01, 0x00, 0x01, 0x03]
 		);
 
 		let decoded = Server::decode(&mut buf).unwrap();
