@@ -39,6 +39,7 @@ mod announce_ok;
 mod filter_type;
 mod go_away;
 mod group_order;
+mod max_subscribe_id;
 mod publisher;
 mod subscribe;
 mod subscribe_done;
@@ -62,6 +63,7 @@ pub use announce_ok::*;
 pub use filter_type::*;
 pub use go_away::*;
 pub use group_order::*;
+pub use max_subscribe_id::*;
 pub use publisher::*;
 pub use subscribe::*;
 pub use subscribe_done::*;
@@ -182,6 +184,7 @@ message_types! {
 	SubscribeOk = 0x4,
 	SubscribeError = 0x5,
 	SubscribeDone = 0xb,
+	MaxSubscribeId = 0x15,
 
 	// ANNOUNCE family, sent by publisher
 	Announce = 0x6,
