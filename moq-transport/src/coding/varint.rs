@@ -255,6 +255,7 @@ impl Encode for u8 {
 
 impl Decode for u8 {
 	fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+		Self::decode_remaining(r, 1)?;
 		Ok(r.get_u8())
 	}
 }
