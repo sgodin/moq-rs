@@ -75,7 +75,6 @@ if [ "$#" -gt 0 ]; then
 fi
 
 #Common param
-videofps=25
 gopduration=1
 
 # Extract resolution and bitrate from the first argument and calculate other related parameters
