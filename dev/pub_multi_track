@@ -190,7 +190,7 @@ codec_v2="-c:v:2 $COMMON_X264_PARAMS \
 
 ffmpeg -hide_banner -v quiet \
 	-stream_loop -1 -re \
-	-i "$INPUT" -r ${videofps} \
+	-i "$INPUT" \
 	-filter_complex "[0:v]split=3[v0][v1][v2]; ${filter_complex}" \
 	-map "[v0final]" -map "[v1final]" -map "[v2final]" -map 0:a \
 	$codec_v0 \
