@@ -1,5 +1,3 @@
-version: "3.8"
-
 x-moq: &x-moq
   build: .
   environment:
@@ -18,7 +16,6 @@ services:
     ports:
       - "6379"
 
-  api:
     <<: *x-moq
     entrypoint: moq-api
     command: --redis redis://redis:6379
