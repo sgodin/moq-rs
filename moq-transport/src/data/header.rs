@@ -87,7 +87,7 @@ macro_rules! header_types {
 // Each stream type is prefixed with the given VarInt type.
 // https://www.ietf.org/archive/id/draft-ietf-moq-transport-06.html#section-7
 header_types! {
-	//Datagram = 0x1,
-	Track = 0x2,
-	Subgroup = 0x4,
+    //Datagram = 0x1,
+    Track = 0x2,
+    Subgroup = 0x4,
 }

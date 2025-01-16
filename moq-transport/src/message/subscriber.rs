@@ -45,15 +45,15 @@ macro_rules! subscriber_msgs {
 }
 
 subscriber_msgs! {
-	AnnounceOk,
-	AnnounceError,
-	AnnounceCancel,
-	Subscribe,
-	Unsubscribe,
-	SubscribeUpdate,
-	TrackStatusRequest,
-	SubscribeNamespace,
-	SubscribeNamespaceOk,
-	SubscribeNamespaceError,
-	UnsubscribeNamespace,
+    AnnounceOk,
+    AnnounceError,
+    AnnounceCancel,
+    Subscribe,
+    Unsubscribe,
+    SubscribeUpdate,
+    TrackStatusRequest,
+    SubscribeNamespace,
+    SubscribeNamespaceOk,
+    SubscribeNamespaceError,
+    UnsubscribeNamespace,
 }
