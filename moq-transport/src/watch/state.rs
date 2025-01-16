@@ -151,7 +151,7 @@ impl<'a, T> StateRef<'a, T> {
 	}
 }
 
-impl<'a, T> Deref for StateRef<'a, T> {
+impl<T> Deref for StateRef<'_, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -159,7 +159,7 @@ impl<'a, T> Deref for StateRef<'a, T> {
 	}
 }
 
-impl<'a, T: fmt::Debug> fmt::Debug for StateRef<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for StateRef<'_, T> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		self.lock.fmt(f)
 	}
@@ -170,7 +170,7 @@ pub struct StateMut<'a, T> {
 	_drop: Arc<StateDrop<T>>,
 }
 
-impl<'a, T> Deref for StateMut<'a, T> {
+impl<T> Deref for StateMut<'_, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -178,19 +178,19 @@ impl<'a, T> Deref for StateMut<'a, T> {
 	}
 }
 
-impl<'a, T> DerefMut for StateMut<'a, T> {
+impl<T> DerefMut for StateMut<'_, T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.lock.value
 	}
 }
 
-impl<'a, T> Drop for StateMut<'a, T> {
+impl<T> Drop for StateMut<'_, T> {
 	fn drop(&mut self) {
 		self.lock.notify();
 	}
 }
 
-impl<'a, T: fmt::Debug> fmt::Debug for StateMut<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for StateMut<'_, T> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		self.lock.fmt(f)
 	}
