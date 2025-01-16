@@ -27,7 +27,7 @@ services:
 
   relay1:
     <<: *x-moq
-    entrypoint: moq-relay
+    entrypoint: moq-relay-ietf
     command: --tls-cert /etc/tls/cert --tls-key /etc/tls/key --tls-disable-verify --api http://api --node https://relay1 --dev --announce https://dir
     depends_on:
       - api
@@ -38,7 +38,7 @@ services:
 
   relay2:
     <<: *x-moq
-    entrypoint: moq-relay
+    entrypoint: moq-relay-ietf
     command: --tls-cert /etc/tls/cert --tls-key /etc/tls/key --tls-disable-verify --api http://api --node https://relay2 --dev --announce https://dir
     depends_on:
       - api
