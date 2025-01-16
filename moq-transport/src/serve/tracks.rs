@@ -19,109 +19,112 @@ use crate::watch::{Queue, State};
 /// Static information about a broadcast.
 #[derive(Debug)]
 pub struct Tracks {
-	pub namespace: Tuple,
+    pub namespace: Tuple,
 }
 
 impl Tracks {
-	pub fn new(namespace: Tuple) -> Self {
-		Self { namespace }
-	}
+    pub fn new(namespace: Tuple) -> Self {
+        Self { namespace }
+    }
 
-	pub fn produce(self) -> (TracksWriter, TracksRequest, TracksReader) {
-		let info = Arc::new(self);
-		let state = State::default().split();
-		let queue = Queue::default().split();
+    pub fn produce(self) -> (TracksWriter, TracksRequest, TracksReader) {
+        let info = Arc::new(self);
+        let state = State::default().split();
+        let queue = Queue::default().split();
 
-		let writer = TracksWriter::new(state.0.clone(), info.clone());
-		let request = TracksRequest::new(state.0, queue.0, info.clone());
-		let reader = TracksReader::new(state.1, queue.1, info);
+        let writer = TracksWriter::new(state.0.clone(), info.clone());
+        let request = TracksRequest::new(state.0, queue.0, info.clone());
+        let reader = TracksReader::new(state.1, queue.1, info);
 
-		(writer, request, reader)
-	}
+        (writer, request, reader)
+    }
 }
 
 #[derive(Default)]
 pub struct TracksState {
-	tracks: HashMap<String, TrackReader>,
+    tracks: HashMap<String, TrackReader>,
 }
 
 /// Publish new tracks for a broadcast by name.
 pub struct TracksWriter {
-	state: State<TracksState>,
-	pub info: Arc<Tracks>,
+    state: State<TracksState>,
+    pub info: Arc<Tracks>,
 }
 
 impl TracksWriter {
-	fn new(state: State<TracksState>, info: Arc<Tracks>) -> Self {
-		Self { state, info }
-	}
+    fn new(state: State<TracksState>, info: Arc<Tracks>) -> Self {
+        Self { state, info }
+    }
 
-	/// Create a new track with the given name, inserting it into the broadcast.
-	/// None is returned if all [TracksReader]s have been dropped.
-	pub fn create(&mut self, track: &str) -> Option<TrackWriter> {
-		let (writer, reader) = Track {
-			namespace: self.namespace.clone(),
-			name: track.to_owned(),
-		}
-		.produce();
+    /// Create a new track with the given name, inserting it into the broadcast.
+    /// None is returned if all [TracksReader]s have been dropped.
+    pub fn create(&mut self, track: &str) -> Option<TrackWriter> {
+        let (writer, reader) = Track {
+            namespace: self.namespace.clone(),
+            name: track.to_owned(),
+        }
+        .produce();
 
-		// NOTE: We overwrite the track if it already exists.
-		self.state.lock_mut()?.tracks.insert(track.to_owned(), reader);
+        // NOTE: We overwrite the track if it already exists.
+        self.state
+            .lock_mut()?
+            .tracks
+            .insert(track.to_owned(), reader);
 
-		Some(writer)
-	}
+        Some(writer)
+    }
 
-	pub fn remove(&mut self, track: &str) -> Option<TrackReader> {
-		self.state.lock_mut()?.tracks.remove(track)
-	}
+    pub fn remove(&mut self, track: &str) -> Option<TrackReader> {
+        self.state.lock_mut()?.tracks.remove(track)
+    }
 }
 
 impl Deref for TracksWriter {
-	type Target = Tracks;
+    type Target = Tracks;
 
-	fn deref(&self) -> &Self::Target {
-		&self.info
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
 }
 
 pub struct TracksRequest {
-	#[allow(dead_code)] // Avoid dropping the write side
-	state: State<TracksState>,
-	incoming: Option<Queue<TrackWriter>>,
-	pub info: Arc<Tracks>,
+    #[allow(dead_code)] // Avoid dropping the write side
+    state: State<TracksState>,
+    incoming: Option<Queue<TrackWriter>>,
+    pub info: Arc<Tracks>,
 }
 
 impl TracksRequest {
-	fn new(state: State<TracksState>, incoming: Queue<TrackWriter>, info: Arc<Tracks>) -> Self {
-		Self {
-			state,
-			incoming: Some(incoming),
-			info,
-		}
-	}
+    fn new(state: State<TracksState>, incoming: Queue<TrackWriter>, info: Arc<Tracks>) -> Self {
+        Self {
+            state,
+            incoming: Some(incoming),
+            info,
+        }
+    }
 
-	/// Wait for a request to create a new track.
-	/// None is returned if all [TracksReader]s have been dropped.
-	pub async fn next(&mut self) -> Option<TrackWriter> {
-		self.incoming.as_mut()?.pop().await
-	}
+    /// Wait for a request to create a new track.
+    /// None is returned if all [TracksReader]s have been dropped.
+    pub async fn next(&mut self) -> Option<TrackWriter> {
+        self.incoming.as_mut()?.pop().await
+    }
 }
 
 impl Deref for TracksRequest {
-	type Target = Tracks;
+    type Target = Tracks;
 
-	fn deref(&self) -> &Self::Target {
-		&self.info
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
 }
 
 impl Drop for TracksRequest {
-	fn drop(&mut self) {
-		// Close any tracks still in the Queue
-		for track in self.incoming.take().unwrap().close() {
-			let _ = track.close(ServeError::NotFound);
-		}
-	}
+    fn drop(&mut self) {
+        // Close any tracks still in the Queue
+        for track in self.incoming.take().unwrap().close() {
+            let _ = track.close(ServeError::NotFound);
+        }
+    }
 }
 
 /// Subscribe to a broadcast by requesting tracks.
@@ -129,47 +132,47 @@ impl Drop for TracksRequest {
 /// This can be cloned to create handles.
 #[derive(Clone)]
 pub struct TracksReader {
-	state: State<TracksState>,
-	queue: Queue<TrackWriter>,
-	pub info: Arc<Tracks>,
+    state: State<TracksState>,
+    queue: Queue<TrackWriter>,
+    pub info: Arc<Tracks>,
 }
 
 impl TracksReader {
-	fn new(state: State<TracksState>, queue: Queue<TrackWriter>, info: Arc<Tracks>) -> Self {
-		Self { state, queue, info }
-	}
+    fn new(state: State<TracksState>, queue: Queue<TrackWriter>, info: Arc<Tracks>) -> Self {
+        Self { state, queue, info }
+    }
 
-	/// Get or request a track from the broadcast by name.
-	/// None is returned if [TracksWriter] or [TracksRequest] cannot fufill the request.
-	pub fn subscribe(&mut self, name: &str) -> Option<TrackReader> {
-		let state = self.state.lock();
+    /// Get or request a track from the broadcast by name.
+    /// None is returned if [TracksWriter] or [TracksRequest] cannot fufill the request.
+    pub fn subscribe(&mut self, name: &str) -> Option<TrackReader> {
+        let state = self.state.lock();
 
-		if let Some(track) = state.tracks.get(name) {
-			return Some(track.clone());
-		}
+        if let Some(track) = state.tracks.get(name) {
+            return Some(track.clone());
+        }
 
-		let mut state = state.into_mut()?;
-		let track = Track {
-			namespace: self.namespace.clone(),
-			name: name.to_owned(),
-		}
-		.produce();
+        let mut state = state.into_mut()?;
+        let track = Track {
+            namespace: self.namespace.clone(),
+            name: name.to_owned(),
+        }
+        .produce();
 
-		if self.queue.push(track.0).is_err() {
-			return None;
-		}
+        if self.queue.push(track.0).is_err() {
+            return None;
+        }
 
-		// We requested the track sucessfully so we can deduplicate it.
-		state.tracks.insert(name.to_owned(), track.1.clone());
+        // We requested the track sucessfully so we can deduplicate it.
+        state.tracks.insert(name.to_owned(), track.1.clone());
 
-		Some(track.1.clone())
-	}
+        Some(track.1.clone())
+    }
 }
 
 impl Deref for TracksReader {
-	type Target = Tracks;
+    type Target = Tracks;
 
-	fn deref(&self) -> &Self::Target {
-		&self.info
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
 }

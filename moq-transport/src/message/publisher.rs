@@ -45,10 +45,10 @@ macro_rules! publisher_msgs {
 }
 
 publisher_msgs! {
-	Announce,
-	Unannounce,
-	SubscribeOk,
-	SubscribeError,
-	SubscribeDone,
-	TrackStatus,
+    Announce,
+    Unannounce,
+    SubscribeOk,
+    SubscribeError,
+    SubscribeDone,
+    TrackStatus,
 }

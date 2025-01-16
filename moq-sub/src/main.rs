@@ -10,65 +10,68 @@ use moq_transport::{coding::Tuple, serve::Tracks};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+    env_logger::init();
 
-	// Disable tracing so we don't get a bunch of Quinn spam.
-	let tracer = tracing_subscriber::FmtSubscriber::builder()
-		.with_max_level(tracing::Level::WARN)
-		.finish();
-	tracing::subscriber::set_global_default(tracer).unwrap();
+    // Disable tracing so we don't get a bunch of Quinn spam.
+    let tracer = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::WARN)
+        .finish();
+    tracing::subscriber::set_global_default(tracer).unwrap();
 
-	let out = tokio::io::stdout();
+    let out = tokio::io::stdout();
 
-	let config = Config::parse();
-	let tls = config.tls.load()?;
-	let quic = quic::Endpoint::new(quic::Config { bind: config.bind, tls })?;
+    let config = Config::parse();
+    let tls = config.tls.load()?;
+    let quic = quic::Endpoint::new(quic::Config {
+        bind: config.bind,
+        tls,
+    })?;
 
-	let session = quic.client.connect(&config.url).await?;
+    let session = quic.client.connect(&config.url).await?;
 
-	let (session, subscriber) = moq_transport::session::Subscriber::connect(session)
-		.await
-		.context("failed to create MoQ Transport session")?;
+    let (session, subscriber) = moq_transport::session::Subscriber::connect(session)
+        .await
+        .context("failed to create MoQ Transport session")?;
 
-	// Associate empty set of Tracks with provided namespace
-	let tracks = Tracks::new(Tuple::from_utf8_path(&config.name));
+    // Associate empty set of Tracks with provided namespace
+    let tracks = Tracks::new(Tuple::from_utf8_path(&config.name));
 
-	let mut media = Media::new(subscriber, tracks, out).await?;
+    let mut media = Media::new(subscriber, tracks, out).await?;
 
-	tokio::select! {
-		res = session.run() => res.context("session error")?,
-		res = media.run() => res.context("media error")?,
-	}
+    tokio::select! {
+        res = session.run() => res.context("session error")?,
+        res = media.run() => res.context("media error")?,
+    }
 
-	Ok(())
+    Ok(())
 }
 
 #[derive(Parser, Clone)]
 pub struct Config {
-	/// Listen for UDP packets on the given address.
-	#[arg(long, default_value = "[::]:0")]
-	pub bind: net::SocketAddr,
+    /// Listen for UDP packets on the given address.
+    #[arg(long, default_value = "[::]:0")]
+    pub bind: net::SocketAddr,
 
-	/// Connect to the given URL starting with https://
-	#[arg(value_parser = moq_url)]
-	pub url: Url,
+    /// Connect to the given URL starting with https://
+    #[arg(value_parser = moq_url)]
+    pub url: Url,
 
-	/// The name of the broadcast
-	#[arg(long)]
-	pub name: String,
+    /// The name of the broadcast
+    #[arg(long)]
+    pub name: String,
 
-	/// The TLS configuration.
-	#[command(flatten)]
-	pub tls: moq_native_ietf::tls::Args,
+    /// The TLS configuration.
+    #[command(flatten)]
+    pub tls: moq_native_ietf::tls::Args,
 }
 
 fn moq_url(s: &str) -> Result<Url, String> {
-	let url = Url::try_from(s).map_err(|e| e.to_string())?;
+    let url = Url::try_from(s).map_err(|e| e.to_string())?;
 
-	// Make sure the scheme is moq
-	if url.scheme() != "https" && url.scheme() != "moqt" {
-		return Err("url scheme must be https:// for WebTransport & moqt:// for QUIC".to_string());
-	}
+    // Make sure the scheme is moq
+    if url.scheme() != "https" && url.scheme() != "moqt" {
+        return Err("url scheme must be https:// for WebTransport & moqt:// for QUIC".to_string());
+    }
 
-	Ok(url)
+    Ok(url)
 }

@@ -169,85 +169,85 @@ macro_rules! message_types {
 
 // Each message is prefixed with the given VarInt type.
 message_types! {
-	// NOTE: Object and Setup are in other modules.
-	// Object = 0x0
-	// ObjectUnbounded = 0x2
-	// SetupClient = 0x40
-	// SetupServer = 0x41
+    // NOTE: Object and Setup are in other modules.
+    // Object = 0x0
+    // ObjectUnbounded = 0x2
+    // SetupClient = 0x40
+    // SetupServer = 0x41
 
-	// SUBSCRIBE family, sent by subscriber
-	SubscribeUpdate = 0x2,
-	Subscribe = 0x3,
-	Unsubscribe = 0xa,
+    // SUBSCRIBE family, sent by subscriber
+    SubscribeUpdate = 0x2,
+    Subscribe = 0x3,
+    Unsubscribe = 0xa,
 
-	// SUBSCRIBE family, sent by publisher
-	SubscribeOk = 0x4,
-	SubscribeError = 0x5,
-	SubscribeDone = 0xb,
-	MaxSubscribeId = 0x15,
+    // SUBSCRIBE family, sent by publisher
+    SubscribeOk = 0x4,
+    SubscribeError = 0x5,
+    SubscribeDone = 0xb,
+    MaxSubscribeId = 0x15,
 
-	// ANNOUNCE family, sent by publisher
-	Announce = 0x6,
-	Unannounce = 0x9,
+    // ANNOUNCE family, sent by publisher
+    Announce = 0x6,
+    Unannounce = 0x9,
 
-	// ANNOUNCE family, sent by subscriber
-	AnnounceOk = 0x7,
-	AnnounceError = 0x8,
-	AnnounceCancel = 0xc,
+    // ANNOUNCE family, sent by subscriber
+    AnnounceOk = 0x7,
+    AnnounceError = 0x8,
+    AnnounceCancel = 0xc,
 
-	// TRACK_STATUS_REQUEST, sent by subscriber
-	TrackStatusRequest = 0xd,
+    // TRACK_STATUS_REQUEST, sent by subscriber
+    TrackStatusRequest = 0xd,
 
-	// TRACK_STATUS, sent by publisher
-	TrackStatus = 0xe,
+    // TRACK_STATUS, sent by publisher
+    TrackStatus = 0xe,
 
-	// Misc
-	GoAway = 0x10,
+    // Misc
+    GoAway = 0x10,
 
-	// NAMESPACE family, sent by subscriber
-	SubscribeNamespace = 0x11,
-	SubscribeNamespaceOk = 0x12,
-	SubscribeNamespaceError = 0x13,
-	UnsubscribeNamespace = 0x14,
+    // NAMESPACE family, sent by subscriber
+    SubscribeNamespace = 0x11,
+    SubscribeNamespaceOk = 0x12,
+    SubscribeNamespaceError = 0x13,
+    UnsubscribeNamespace = 0x14,
 }
 
 /// Track Status Codes
 /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-04.html#name-track_status
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub enum TrackStatusCode {
-	// 0x00: The track is in progress, and subsequent fields contain the highest group and object ID for that track.
-	InProgress = 0x00,
-	// 0x01: The track does not exist. Subsequent fields MUST be zero, and any other value is a malformed message.
-	DoesNotExist = 0x01,
-	// 0x02: The track has not yet begun. Subsequent fields MUST be zero. Any other value is a malformed message.
-	NotYetBegun = 0x02,
-	// 0x03: The track has finished, so there is no "live edge." Subsequent fields contain the highest Group and object ID known.
-	Finished = 0x03,
-	// 0x04: The sender is a relay that cannot obtain the current track status from upstream. Subsequent fields contain the largest group and object ID known.
-	Relay = 0x04,
+    // 0x00: The track is in progress, and subsequent fields contain the highest group and object ID for that track.
+    InProgress = 0x00,
+    // 0x01: The track does not exist. Subsequent fields MUST be zero, and any other value is a malformed message.
+    DoesNotExist = 0x01,
+    // 0x02: The track has not yet begun. Subsequent fields MUST be zero. Any other value is a malformed message.
+    NotYetBegun = 0x02,
+    // 0x03: The track has finished, so there is no "live edge." Subsequent fields contain the highest Group and object ID known.
+    Finished = 0x03,
+    // 0x04: The sender is a relay that cannot obtain the current track status from upstream. Subsequent fields contain the largest group and object ID known.
+    Relay = 0x04,
 }
 
 impl Decode for TrackStatusCode {
-	fn decode<B: bytes::Buf>(r: &mut B) -> Result<Self, DecodeError> {
-		match u64::decode(r)? {
-			0x00 => Ok(Self::InProgress),
-			0x01 => Ok(Self::DoesNotExist),
-			0x02 => Ok(Self::NotYetBegun),
-			0x03 => Ok(Self::Finished),
-			0x04 => Ok(Self::Relay),
-			_ => Err(DecodeError::InvalidTrackStatusCode),
-		}
-	}
+    fn decode<B: bytes::Buf>(r: &mut B) -> Result<Self, DecodeError> {
+        match u64::decode(r)? {
+            0x00 => Ok(Self::InProgress),
+            0x01 => Ok(Self::DoesNotExist),
+            0x02 => Ok(Self::NotYetBegun),
+            0x03 => Ok(Self::Finished),
+            0x04 => Ok(Self::Relay),
+            _ => Err(DecodeError::InvalidTrackStatusCode),
+        }
+    }
 }
 
 impl Encode for TrackStatusCode {
-	fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-		match self {
-			Self::InProgress => (0x00_u64).encode(w),
-			Self::DoesNotExist => (0x01_u64).encode(w),
-			Self::NotYetBegun => (0x02_u64).encode(w),
-			Self::Finished => (0x03_u64).encode(w),
-			Self::Relay => (0x04_u64).encode(w),
-		}
-	}
+    fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+        match self {
+            Self::InProgress => (0x00_u64).encode(w),
+            Self::DoesNotExist => (0x01_u64).encode(w),
+            Self::NotYetBegun => (0x02_u64).encode(w),
+            Self::Finished => (0x03_u64).encode(w),
+            Self::Relay => (0x04_u64).encode(w),
+        }
+    }
 }

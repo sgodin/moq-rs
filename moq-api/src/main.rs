@@ -6,9 +6,9 @@ use server::{Server, ServerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
-	env_logger::init();
+    env_logger::init();
 
-	let config = ServerConfig::parse();
-	let server = Server::new(config);
-	server.run().await
+    let config = ServerConfig::parse();
+    let server = Server::new(config);
+    server.run().await
 }
