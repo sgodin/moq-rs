@@ -55,6 +55,10 @@ mod track_status_request;
 mod unannounce;
 mod unsubscribe;
 mod unsubscribe_namespace;
+mod fetch;
+mod fetch_cancel;
+mod fetch_ok;
+mod fetch_error;
 
 pub use announce::*;
 pub use announce_cancel::*;
@@ -79,6 +83,10 @@ pub use track_status_request::*;
 pub use unannounce::*;
 pub use unsubscribe::*;
 pub use unsubscribe_namespace::*;
+pub use fetch::*;
+pub use fetch_cancel::*;
+pub use fetch_ok::*;
+pub use fetch_error::*;
 
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 use std::fmt;
@@ -209,6 +217,12 @@ message_types! {
     SubscribeNamespaceOk = 0x12,
     SubscribeNamespaceError = 0x13,
     UnsubscribeNamespace = 0x14,
+
+    // FETCH family, sent by subscriber
+    Fetch = 0x16,
+    FetchCancel = 0x17,
+    FetchOk = 0x18,
+    FetchError = 0x19,
 }
 
 /// Track Status Codes
