@@ -34,7 +34,14 @@ impl Decode for FetchOk {
 
         let params = Params::decode(r)?;
 
-        Ok(Self { id, group_order, end_of_track, largest_group_id, largest_object_id, params })
+        Ok(Self {
+            id,
+            group_order,
+            end_of_track,
+            largest_group_id,
+            largest_object_id,
+            params,
+        })
     }
 }
 
