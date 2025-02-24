@@ -148,7 +148,7 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_max_subscribe_id(&mut self, msg: &message::MaxSubscribeId) -> Result<(), SessionError> {
+    fn recv_max_subscribe_id(&mut self, _msg: &message::MaxSubscribeId) -> Result<(), SessionError> {
         // TODO: The Maximum Subscribe Id MUST only increase within a session,
         // and receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller
         // Subscribe ID value is a 'Protocol Violation'
