@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4](https://github.com/englishm/moq-rs/compare/moq-pub-v0.8.3...moq-pub-v0.8.4) - 2025-02-24
+
+### Other
+
+- updated the following local packages: moq-transport
+
 ## [0.8.3](https://github.com/englishm/moq-rs/compare/moq-pub-v0.8.2...moq-pub-v0.8.3) - 2025-01-16
 
 ### Other

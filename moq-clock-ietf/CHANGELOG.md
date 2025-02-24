@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4](https://github.com/englishm/moq-rs/compare/moq-clock-ietf-v0.6.3...moq-clock-ietf-v0.6.4) - 2025-02-24
+
+### Other
+
+- updated the following local packages: moq-transport
+
 ## [0.6.3](https://github.com/englishm/moq-rs/compare/moq-clock-ietf-v0.6.2...moq-clock-ietf-v0.6.3) - 2025-01-16
 
 ### Other
