@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/englishm/moq-rs/compare/moq-transport-v0.9.0...moq-transport-v0.10.0) - 2025-02-24
+
+### Fixed
+
+- fixed clippy warning
+
+### Other
+
+- Merge pull request [#32](https://github.com/englishm/moq-rs/pull/32) from englishm/me/draft-07
+- added required fields for announce_cancel
+- cargo fmt
+- Fix linter nit: unused variable
+- Cleaned up and uncommmented error.rs, started adding max_subscribe_id
+
 ## [0.9.0](https://github.com/englishm/moq-rs/compare/moq-transport-v0.8.1...moq-transport-v0.9.0) - 2025-01-16
 
 ### Fixed
