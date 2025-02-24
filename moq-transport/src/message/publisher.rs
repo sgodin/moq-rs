@@ -52,4 +52,6 @@ publisher_msgs! {
     SubscribeDone,
     MaxSubscribeId,
     TrackStatus,
+    FetchOk,
+    FetchError,
 }
