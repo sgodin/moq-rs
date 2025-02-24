@@ -84,7 +84,7 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
         let client = Server {
-            version: Version::DRAFT_06,
+            version: Version::DRAFT_07,
             role: Role::Both,
             params: Params::default(),
         };
