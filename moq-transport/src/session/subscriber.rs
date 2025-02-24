@@ -85,6 +85,7 @@ impl Subscriber {
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::SubscribeDone(msg) => self.recv_subscribe_done(msg),
+            message::Publisher::MaxSubscribeId(msg) => self.recv_max_subscribe_id(msg),
             message::Publisher::TrackStatus(msg) => self.recv_track_status(msg),
         };
 
@@ -144,6 +145,17 @@ impl Subscriber {
             subscribe.error(ServeError::Closed(msg.code))?;
         }
 
+        Ok(())
+    }
+
+    fn recv_max_subscribe_id(
+        &mut self,
+        _msg: &message::MaxSubscribeId,
+    ) -> Result<(), SessionError> {
+        // TODO: The Maximum Subscribe Id MUST only increase within a session,
+        // and receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller
+        // Subscribe ID value is a 'Protocol Violation'
+        // The session should be accessible here to check the max_subscribe_id
         Ok(())
     }
 

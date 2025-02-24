@@ -207,13 +207,13 @@ impl Encode for VarInt {
             w.put_u8(x as u8)
         } else if x < 2u64.pow(14) {
             Self::encode_remaining(w, 2)?;
-            w.put_u16(0b01 << 14 | x as u16)
+            w.put_u16((0b01 << 14) | x as u16)
         } else if x < 2u64.pow(30) {
             Self::encode_remaining(w, 4)?;
-            w.put_u32(0b10 << 30 | x as u32)
+            w.put_u32((0b10 << 30) | x as u32)
         } else if x < 2u64.pow(62) {
             Self::encode_remaining(w, 8)?;
-            w.put_u64(0b11 << 62 | x)
+            w.put_u64((0b11 << 62) | x)
         } else {
             return Err(BoundsExceeded.into());
         }
