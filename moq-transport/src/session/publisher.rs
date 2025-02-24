@@ -202,13 +202,15 @@ impl Publisher {
 
     fn recv_announce_error(&mut self, msg: message::AnnounceError) -> Result<(), SessionError> {
         if let Some(announce) = self.announces.lock().unwrap().remove(&msg.namespace) {
-            announce.recv_error(ServeError::Closed(msg.code))?;
+            announce.recv_error(ServeError::Closed(msg.error_code))?;
         }
 
         Ok(())
     }
 
     fn recv_announce_cancel(&mut self, msg: message::AnnounceCancel) -> Result<(), SessionError> {
+        // TODO: If a publisher receives new subscriptions for that namespace after receiving an ANNOUNCE_CANCEL,
+        // it SHOULD close the session as a 'Protocol Violation'.
         if let Some(announce) = self.announces.lock().unwrap().remove(&msg.namespace) {
             announce.recv_error(ServeError::Cancel)?;
         }

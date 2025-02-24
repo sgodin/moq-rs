@@ -83,15 +83,18 @@ impl Drop for Announced {
     fn drop(&mut self) {
         let err = self.error.clone().unwrap_or(ServeError::Done);
 
+        // TODO: Not sure if the error code is correct.
         if self.ok {
             self.session.send_message(message::AnnounceCancel {
                 namespace: self.namespace.clone(),
+                error_code: 0_u64,
+                reason_phrase: "".into(),
             });
         } else {
             self.session.send_message(message::AnnounceError {
                 namespace: self.namespace.clone(),
-                code: err.code(),
-                reason: err.to_string(),
+                error_code: err.code(),
+                reason_phrase: err.to_string(),
             });
         }
     }
