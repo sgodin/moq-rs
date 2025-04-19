@@ -42,7 +42,14 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
         let catalog = if self.request_catalog {
-            Some(self.get_catalog().await?)
+            // The catalog track has no standardized name, but
+            // both moq-pub of moq-rs and gst-moq-pub uses ".catalog".
+            let buf = self.download_first_object(".catalog", "catalog").await?;
+            let s = std::str::from_utf8(&buf)?;
+            let c: moq_catalog::Root = serde_json::from_str(s)?;
+            info!("catalog: {c:#?}");
+            anyhow::ensure!(c.version == 1, "Unknown catalog version");
+            Some(c)
         } else {
             None
         };
@@ -51,31 +58,7 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
                 Some(ref c) => &c.tracks[0].init_track.clone().unwrap(),
                 None => "0.mp4",
             };
-            let track = self
-                .tracks_writer
-                .create(&init_track_name)
-                .context("failed to create init track")?;
-
-            let mut subscriber = self.subscriber.clone();
-            tokio::task::spawn(async move {
-                subscriber.subscribe(track).await.unwrap_or_else(|err| {
-                    warn!("failed to subscribe to init track: {err:?}");
-                });
-            });
-
-            let track = self
-                .broadcast
-                .subscribe(&init_track_name)
-                .context("no init track")?;
-            let mut group = match track.mode().await? {
-                TrackReaderMode::Subgroups(mut groups) => {
-                    groups.next().await?.context("no init group")?
-                }
-                _ => anyhow::bail!("expected init segment"),
-            };
-
-            let object = group.next().await?.context("no init fragment")?;
-            let buf = Self::recv_object(object).await?;
+            let buf = self.download_first_object(init_track_name, "init").await?;
             self.output.lock().await.write_all(&buf).await?;
             let mut reader = Cursor::new(&buf);
 
@@ -143,37 +126,40 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
         Ok(())
     }
 
-    async fn get_catalog(&mut self) -> anyhow::Result<moq_catalog::Root> {
-        let track_name = ".catalog";
+    async fn download_first_object(
+        &mut self,
+        track_name: &str,
+        alias: &'static str,
+    ) -> anyhow::Result<Vec<u8>> {
         let track = self
             .tracks_writer
             .create(track_name)
-            .context("failed to create catalog track")?;
+            .context(format!("failed to create {alias} track"))?;
+
         let mut subscriber = self.subscriber.clone();
         tokio::task::spawn(async move {
             subscriber.subscribe(track).await.unwrap_or_else(|err| {
-                warn!("failed to subscribe to catalog track: {err:?}");
+                warn!("failed to subscribe to {alias} track: {err:?}");
             });
         });
 
         let track = self
             .broadcast
             .subscribe(track_name)
-            .context("no catalog track")?;
+            .context(format!("no {alias} track"))?;
         let mut group = match track.mode().await? {
             TrackReaderMode::Subgroups(mut groups) => {
-                groups.next().await?.context("no catalog group")?
+                groups.next().await?.context(format!("no {alias} group"))?
             }
-            _ => anyhow::bail!("expected catalog segment"),
+            _ => anyhow::bail!("expected {alias} segment"),
         };
 
-        let object = group.next().await?.context("no catalog fragment")?;
+        let object = group
+            .next()
+            .await?
+            .context(format!("no {alias} fragment"))?;
         let buf = Self::recv_object(object).await?;
-        let s = std::str::from_utf8(&buf)?;
-        let catalog: moq_catalog::Root = serde_json::from_str(&s)?;
-        info!("catalog: {catalog:#?}");
-        anyhow::ensure!(catalog.version == 1, "Unknown catalog version");
-        return Ok(catalog);
+        Ok(buf)
     }
 
     async fn recv_track(track: TrackReader, out: Arc<Mutex<O>>) -> anyhow::Result<()> {
