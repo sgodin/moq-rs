@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     // Associate empty set of Tracks with provided namespace
     let tracks = Tracks::new(Tuple::from_utf8_path(&config.name));
 
-    let mut media = Media::new(subscriber, tracks, out).await?;
+    let mut media = Media::new(subscriber, tracks, out, config.catalog).await?;
 
     tokio::select! {
         res = session.run() => res.context("session error")?,
@@ -63,6 +63,15 @@ pub struct Config {
     /// The TLS configuration.
     #[command(flatten)]
     pub tls: moq_native_ietf::tls::Args,
+
+    /// Request the catalog track (to get other track names)
+    ///
+    /// First download the track named ".catalog" to find out the
+    /// track names to subscribe to.  Other parameters like video
+    /// dimension are extracted from the tracks themselves.  Default:
+    /// "0.mp4" for the init track, "{track_id}.m4s" for the rest.
+    #[arg(long)]
+    pub catalog: bool,
 }
 
 fn moq_url(s: &str) -> Result<Url, String> {
