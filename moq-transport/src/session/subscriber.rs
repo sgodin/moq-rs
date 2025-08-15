@@ -9,7 +9,6 @@ use crate::{
     data,
     message::{self, Message},
     serve::{self, ServeError},
-    setup,
 };
 
 use crate::watch::Queue;
@@ -41,14 +40,14 @@ impl Subscriber {
 
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
         let (session, _, subscriber) =
-            Session::accept_role(session, setup::Role::Subscriber).await?;
+            Session::accept(session).await?;
         Ok((session, subscriber.unwrap()))
     }
 
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
         let (session, _, subscriber) =
-            Session::connect_role(session, setup::Role::Subscriber).await?;
-        Ok((session, subscriber.unwrap()))
+            Session::connect(session).await?;
+        Ok((session, subscriber))
     }
 
     pub async fn announced(&mut self) -> Option<Announced> {

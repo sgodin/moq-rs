@@ -4,6 +4,7 @@ mod params;
 mod string;
 mod tuple;
 mod varint;
+mod integer;
 
 pub use decode::*;
 pub use encode::*;

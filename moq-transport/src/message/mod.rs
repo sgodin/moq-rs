@@ -180,8 +180,10 @@ message_types! {
     // NOTE: Object and Setup are in other modules.
     // Object = 0x0
     // ObjectUnbounded = 0x2
-    // SetupClient = 0x40
-    // SetupServer = 0x41
+    // SetupClient = 0x20
+    // SetupServer = 0x21
+    // SetupClient = 0x40  // legacy, used in draft versions <= 10
+    // SetupServer = 0x41  // legacy, used in draft versions <= 10
 
     // SUBSCRIBE family, sent by subscriber
     SubscribeUpdate = 0x2,

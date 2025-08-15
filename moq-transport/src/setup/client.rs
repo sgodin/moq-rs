@@ -1,49 +1,36 @@
-use super::{Role, Versions};
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params};
+use super::{Versions};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params, VarInt};
 
 /// Sent by the client to setup the session.
-// NOTE: This is not a message type, but rather the control stream header.
-// Proposal: https://github.com/moq-wg/moq-transport/issues/138
+/// This CLIENT_SETUP message is used by moq-transport draft versions 11 and later.
+/// Id = 0x20 vs 0x40 for versions <= 10.
 #[derive(Debug)]
 pub struct Client {
     /// The list of supported versions in preferred order.
     pub versions: Versions,
 
-    /// Indicate if the client is a publisher, a subscriber, or both.
-    pub role: Role,
-
-    /// Unknown parameters.
+    /// Setup Parameters, ie: PATH, MAX_REQUEST_ID,
+    /// MAX_AUTH_TOKEN_CACHE_SIZE, AUTHORIZATION_TOKEN, etc.
     pub params: Params,
 }
 
 impl Decode for Client {
     /// Decode a client setup message.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let typ = u64::decode(r)?;
-        if typ != 0x40 {
-            return Err(DecodeError::InvalidMessage(typ));
+        let typ = VarInt::decode(r)?;
+        if typ.into_inner() != 0x20 {   // CLIENT_SETUP message ID for draft versions 11 and later
+            return Err(DecodeError::InvalidMessage(typ.into_inner()));
         }
 
-        let _len = u64::decode(r)?;
+        let _len = u16::decode(r)?;
 
         // TODO: Check the length of the message.
 
         let versions = Versions::decode(r)?;
-        let mut params = Params::decode(r)?;
-
-        let role = params
-            .get::<Role>(0)?
-            .ok_or(DecodeError::MissingParameter)?;
-
-        // Make sure the PATH parameter isn't used
-        // TODO: This assumes WebTransport support only
-        if params.has(1) {
-            return Err(DecodeError::InvalidParameter);
-        }
+        let params = Params::decode(r)?;
 
         Ok(Self {
             versions,
-            role,
             params,
         })
     }
@@ -52,20 +39,23 @@ impl Decode for Client {
 impl Encode for Client {
     /// Encode a server setup message.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        0x40_u64.encode(w)?;
+        VarInt::from_u32(0x20).encode(w)?; // CLIENT_SETUP message ID for draft versions 11 and later
 
         // Find out the length of the message
         // by encoding it into a buffer and then encoding the length.
         // This is a bit wasteful, but it's the only way to know the length.
+        // TODO SLG - perhaps we can store the position of the Length field in the BufMut and
+        //       write the length later, to avoid the copy of the message bytes?
         let mut buf = Vec::new();
 
         self.versions.encode(&mut buf).unwrap();
+        self.params.encode(&mut buf).unwrap();
 
-        let mut params = self.params.clone();
-        params.set(0, self.role)?;
-        params.encode(&mut buf).unwrap();
-
-        (buf.len() as u64).encode(w)?;
+        // Make sure buf.len() <= u16::MAX
+        if buf.len() > u16::MAX as usize {
+            return Err(EncodeError::MsgBoundsExceeded);
+        }
+        (buf.len() as u16).encode(w)?;
 
         // At least don't encode the message twice.
         // Instead, write the buffer directly to the writer.
@@ -85,8 +75,7 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
         let client = Client {
-            versions: [Version::DRAFT_07].into(),
-            role: Role::Both,
+            versions: [Version::DRAFT_13].into(),
             params: Params::default(),
         };
 
@@ -94,14 +83,16 @@ mod tests {
         assert_eq!(
             buf.to_vec(),
             vec![
-                0x40, 0x40, 0x0D, 0x01, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x07, 0x01, 0x00,
-                0x01, 0x03
+                0x20,       // Type
+                0x00, 0x0a, // Length
+                0x01,       // 1 Version
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,   // Version DRAFT_13 (0xff00000D)
+                0x00,       // 0 Params
             ]
         );
 
         let decoded = Client::decode(&mut buf).unwrap();
         assert_eq!(decoded.versions, client.versions);
-        assert_eq!(decoded.role, client.role);
-        //assert_eq!(decoded.params, client.params);
+        assert_eq!(decoded.params, client.params);
     }
 }

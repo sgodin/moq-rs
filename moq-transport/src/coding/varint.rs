@@ -222,6 +222,11 @@ impl Encode for VarInt {
     }
 }
 
+// TODO SLG - I'm not convinced that implementing Encode and Decode traits for these standard types as VarInt's is a good idea.
+//            If the MOQ messages really want to encode a raw u32, u64, or usize, as a non-VarInt, then this won't be good.
+
+// TODO SLG - Leave these u64 encodings for now, they are used to encode/decode type and length fields.
+// Should eventually change these to use explicit VarInt encoding instead of u64, and remove these.
 impl Encode for u64 {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
@@ -236,6 +241,9 @@ impl Decode for u64 {
     }
 }
 
+// TODO SLG - Leave these usize encodings for now, they are used to encode/decode length fields in:
+// Params, String, Tuple, Subgroup, Track, and Version encodings.
+// Should eventually change these to use explicit VarInt encoding instead of usize, and remove these.
 impl Encode for usize {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
@@ -244,24 +252,132 @@ impl Encode for usize {
     }
 }
 
-impl Encode for u8 {
-    /// Encode a u8 to the given writer.
-    fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let x = *self;
-        w.put_u8(x);
-        Ok(())
-    }
-}
-
-impl Decode for u8 {
-    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        Self::decode_remaining(r, 1)?;
-        Ok(r.get_u8())
-    }
-}
-
 impl Decode for usize {
-    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+   fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         VarInt::decode(r).map(|v| v.into_inner() as usize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode_usize() {
+        let mut buf = BytesMut::new();
+
+        let i: usize = 123;
+        i.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x40, 0x7b ]); // first 2 bits are 01
+        let decoded = usize::decode(&mut buf).unwrap();
+        assert_eq!(decoded, i);
+    }
+
+    #[test]
+    fn encode_decode_u64() {
+        let mut buf = BytesMut::new();
+
+        let i: u64 = 123;
+        i.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x40, 0x7b ]); // first 2 bits are 01
+        let decoded = u64::decode(&mut buf).unwrap();
+        assert_eq!(decoded, i);
+    }
+
+    #[test]
+    fn encode_u64_overflow() {
+        let mut buf = BytesMut::new();
+
+        let i: u64 = 4611686018427387904;
+        let encoded = i.encode(&mut buf);
+        assert!(matches!(encoded.unwrap_err(), EncodeError::BoundsExceeded(_)));
+    }
+
+    #[test]
+    fn encode_decode_varint() {
+        let mut buf = BytesMut::new();
+
+        // 0 -> 1 byte
+        let i = 0;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x00 ]); // first 2 bits are 00
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 63 -> 1 byte
+        let i = 63;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x3f ]); // first 2 bits are 00
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 64 -> 2 bytes
+        let i = 64;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x40, 0x40 ]); // first 2 bits are 01
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 16383 -> 2 bytes
+        let i = 16383;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x7f, 0xff ]); // first 2 bits are 01
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 16384 -> 4 bytes
+        let i = 16384;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x80, 0x00, 0x40, 0x00 ]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 1073741823 -> 4 bytes
+        let i = 1073741823;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0xbf, 0xff, 0xff, 0xff ]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 1073741824 -> 8 bytes
+        let i = 1073741824;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00 ]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 4611686018427387903 -> 8 bytes
+        let i = 4611686018427387903;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff ]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+    }
+
+    #[test]
+    fn overflow() {
+        let mut buf = BytesMut::new();
+
+        let i = 4611686018427387904;
+        let vi = VarInt(i);
+        let decoded = vi.encode(&mut buf);
+        assert!(matches!(decoded.unwrap_err(), EncodeError::BoundsExceeded(_)));
     }
 }

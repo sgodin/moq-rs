@@ -45,13 +45,10 @@ impl Session {
         webtransport: web_transport::Session,
         sender: Writer,
         recver: Reader,
-        role: setup::Role,
     ) -> (Self, Option<Publisher>, Option<Subscriber>) {
         let outgoing = Queue::default().split();
-        let publisher = role
-            .is_publisher()
-            .then(|| Publisher::new(outgoing.0.clone(), webtransport.clone()));
-        let subscriber = role.is_subscriber().then(|| Subscriber::new(outgoing.0));
+        let publisher = Some(Publisher::new(outgoing.0.clone(), webtransport.clone()));
+        let subscriber = Some(Subscriber::new(outgoing.0));
 
         let session = Self {
             webtransport,
@@ -66,17 +63,8 @@ impl Session {
     }
 
     pub async fn connect(
-        session: web_transport::Session,
-    ) -> Result<(Session, Publisher, Subscriber), SessionError> {
-        Self::connect_role(session, setup::Role::Both).await.map(
-            |(session, publisher, subscriber)| (session, publisher.unwrap(), subscriber.unwrap()),
-        )
-    }
-
-    pub async fn connect_role(
         mut session: web_transport::Session,
-        role: setup::Role,
-    ) -> Result<(Session, Option<Publisher>, Option<Subscriber>), SessionError> {
+    ) -> Result<(Session, Publisher, Subscriber), SessionError> {
         let control = session.open_bi().await?;
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
@@ -84,55 +72,29 @@ impl Session {
         let versions: setup::Versions = [setup::Version::DRAFT_07].into();
 
         let client = setup::Client {
-            role,
             versions: versions.clone(),
             params: Default::default(),
         };
 
-        log::debug!("sending client SETUP: {:?}", client);
+        log::debug!("sending CLIENT_SETUP: {:?}", client);
         sender.encode(&client).await?;
 
         let server: setup::Server = recver.decode().await?;
-        log::debug!("received server SETUP: {:?}", server);
+        log::debug!("received SERVER_SETUP: {:?}", server);
 
-        // Downgrade our role based on the server's role.
-        let role = match server.role {
-            setup::Role::Both => role,
-            setup::Role::Publisher => match role {
-                // Both sides are publishers only
-                setup::Role::Publisher => {
-                    return Err(SessionError::RoleIncompatible(server.role, role))
-                }
-                _ => setup::Role::Subscriber,
-            },
-            setup::Role::Subscriber => match role {
-                // Both sides are subscribers only
-                setup::Role::Subscriber => {
-                    return Err(SessionError::RoleIncompatible(server.role, role))
-                }
-                _ => setup::Role::Publisher,
-            },
-        };
-
-        Ok(Session::new(session, sender, recver, role))
+        let session = Session::new(session, sender, recver);
+        Ok((session.0, session.1.unwrap(), session.2.unwrap()))
     }
 
     pub async fn accept(
-        session: web_transport::Session,
-    ) -> Result<(Session, Option<Publisher>, Option<Subscriber>), SessionError> {
-        Self::accept_role(session, setup::Role::Both).await
-    }
-
-    pub async fn accept_role(
         mut session: web_transport::Session,
-        role: setup::Role,
     ) -> Result<(Session, Option<Publisher>, Option<Subscriber>), SessionError> {
         let control = session.accept_bi().await?;
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
         let client: setup::Client = recver.decode().await?;
-        log::debug!("received client SETUP: {:?}", client);
+        log::debug!("received CLIENT_SETUP: {:?}", client);
 
         if !client.versions.contains(&setup::Version::DRAFT_07) {
             return Err(SessionError::Version(
@@ -141,35 +103,15 @@ impl Session {
             ));
         }
 
-        // Downgrade our role based on the client's role.
-        let role = match client.role {
-            setup::Role::Both => role,
-            setup::Role::Publisher => match role {
-                // Both sides are publishers only
-                setup::Role::Publisher => {
-                    return Err(SessionError::RoleIncompatible(client.role, role))
-                }
-                _ => setup::Role::Subscriber,
-            },
-            setup::Role::Subscriber => match role {
-                // Both sides are subscribers only
-                setup::Role::Subscriber => {
-                    return Err(SessionError::RoleIncompatible(client.role, role))
-                }
-                _ => setup::Role::Publisher,
-            },
-        };
-
         let server = setup::Server {
-            role,
             version: setup::Version::DRAFT_07,
             params: Default::default(),
         };
 
-        log::debug!("sending server SETUP: {:?}", server);
+        log::debug!("sending SERVER_SETUP: {:?}", server);
         sender.encode(&server).await?;
 
-        Ok(Session::new(session, sender, recver, role))
+        Ok(Session::new(session, sender, recver))
     }
 
     pub async fn run(self) -> Result<(), SessionError> {

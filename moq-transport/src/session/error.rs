@@ -21,10 +21,7 @@ pub enum SessionError {
     #[error("unsupported versions: client={0:?} server={1:?}")]
     Version(setup::Versions, setup::Versions),
 
-    // TODO move to a ConnectError
-    #[error("incompatible roles: client={0:?} server={1:?}")]
-    RoleIncompatible(setup::Role, setup::Role),
-
+    /// TODO SLG - eventually remove or morph into error for incorrect control message for publisher/subscriber
     /// The role negiotiated in the handshake was violated. For example, a publisher sent a SUBSCRIBE, or a subscriber sent an OBJECT.
     #[error("role violation")]
     RoleViolation,
@@ -47,11 +44,11 @@ pub enum SessionError {
     WrongSize,
 }
 
+// TODO SLG - update with errors from moq-transport draft-13 section 3.4 Termination
 impl SessionError {
     /// An integer code that is sent over the wire.
     pub fn code(&self) -> u64 {
         match self {
-            Self::RoleIncompatible(..) => 406,
             Self::RoleViolation => 405,
             Self::Session(_) => 503,
             Self::Read(_) => 500,

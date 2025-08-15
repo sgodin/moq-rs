@@ -9,7 +9,6 @@ use crate::{
     coding::Tuple,
     message::{self, Message},
     serve::{ServeError, TracksReader},
-    setup,
 };
 
 use crate::watch::Queue;
@@ -44,7 +43,7 @@ impl Publisher {
     pub async fn accept(
         session: web_transport::Session,
     ) -> Result<(Session, Publisher), SessionError> {
-        let (session, publisher, _) = Session::accept_role(session, setup::Role::Publisher).await?;
+        let (session, publisher, _) = Session::accept(session).await?;
         Ok((session, publisher.unwrap()))
     }
 
@@ -52,8 +51,8 @@ impl Publisher {
         session: web_transport::Session,
     ) -> Result<(Session, Publisher), SessionError> {
         let (session, publisher, _) =
-            Session::connect_role(session, setup::Role::Publisher).await?;
-        Ok((session, publisher.unwrap()))
+            Session::connect(session).await?;
+        Ok((session, publisher))
     }
 
     /// Announce a namespace and serve tracks using the provided [serve::TracksReader].

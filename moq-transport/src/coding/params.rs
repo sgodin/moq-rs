@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Params(pub HashMap<u64, Vec<u8>>);
 
 impl Decode for Params {
