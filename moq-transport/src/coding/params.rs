@@ -1,3 +1,5 @@
+// TODO SLG - Eventually remove this, as KeyValuyePair is the new replacement for this module.
+
 use std::collections::HashMap;
 use std::io::Cursor;
 

@@ -40,7 +40,7 @@ impl Decode for Version {
     /// Decode the version number.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let v = VarInt::decode(r)?;
-        Ok(Self(u32::try_from(v).map_err(|e| DecodeError::BoundsExceeded(e))?))
+        Ok(Self(u32::try_from(v).map_err(DecodeError::BoundsExceeded)?))
     }
 }
 
@@ -54,14 +54,14 @@ impl Encode for Version {
 impl fmt::Debug for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Just reuse the Display formatting
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0 > 0xff000000 {
-            write!(f, "DRAFT_{:02x}", self.0 & 0x00ffffff)
+            write!(f, "DRAFT_{:02}", self.0 & 0x00ffffff)
         } else {
             self.0.fmt(f)
         }
@@ -75,10 +75,10 @@ pub struct Versions(Vec<Version>);
 impl Decode for Versions {
     /// Decode the version list.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let count = u64::decode(r)?;
+        let count = VarInt::decode(r)?;
         let mut vs = Vec::new();
 
-        for _ in 0..count {
+        for _ in 0..count.into_inner() {
             let v = Version::decode(r)?;
             vs.push(v);
         }
@@ -90,7 +90,7 @@ impl Decode for Versions {
 impl Encode for Versions {
     /// Encode the version list.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        self.0.len().encode(w)?;
+        VarInt::try_from(self.0.len())?.encode(w)?;
 
         for v in &self.0 {
             v.encode(w)?;

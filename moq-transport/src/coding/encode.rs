@@ -36,6 +36,9 @@ pub enum EncodeError {
 
     #[error("message too large")]
     MsgBoundsExceeded,
+
+    #[error("field '{0}' too large")]
+    FieldBoundsExceeded(String),
 }
 
 impl From<io::Error> for EncodeError {

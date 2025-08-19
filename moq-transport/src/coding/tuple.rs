@@ -1,18 +1,10 @@
-//
 use super::{Decode, DecodeError, Encode, EncodeError};
 use core::hash::{Hash, Hasher};
+
 /// Tuple Field
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TupleField {
     pub value: Vec<u8>,
-}
-
-impl Eq for TupleField {}
-
-impl PartialEq for TupleField {
-    fn eq(&self, other: &Self) -> bool {
-        self.value.eq(&other.value)
-    }
 }
 
 impl Hash for TupleField {
@@ -51,6 +43,8 @@ impl TupleField {
         field
     }
 
+    /// Allow an encodable structure (ie. implements the Encode trait) to be set as the value.
+    // TODO SLG - is this really useful?
     pub fn set<P: Encode>(&mut self, p: P) -> Result<(), EncodeError> {
         let mut value = Vec::new();
         p.encode(&mut value)?;
@@ -58,13 +52,15 @@ impl TupleField {
         Ok(())
     }
 
+    /// Try to decode the value as the specified Decodable structure (ie. implements the Decode trait).
+    // TODO SLG - is this really useful?
     pub fn get<P: Decode>(&self) -> Result<P, DecodeError> {
         P::decode(&mut bytes::Bytes::from(self.value.clone()))
     }
 }
 
 /// Tuple
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Tuple {
     pub fields: Vec<TupleField>,
 }
@@ -75,17 +71,9 @@ impl Hash for Tuple {
     }
 }
 
-impl Eq for Tuple {}
-
-impl PartialEq for Tuple {
-    fn eq(&self, other: &Self) -> bool {
-        self.fields.eq(&other.fields)
-    }
-}
-
 impl Decode for Tuple {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let count = u64::decode(r)? as usize;
+        let count = usize::decode(r)?;
         let mut fields = Vec::new();
         for _ in 0..count {
             fields.push(TupleField::decode(r)?);
@@ -113,12 +101,12 @@ impl Tuple {
         self.fields.push(field);
     }
 
-    pub fn get(&self, index: usize) -> Result<TupleField, DecodeError> {
-        self.fields[index].get()
-    }
-
     pub fn set(&mut self, index: usize, f: TupleField) -> Result<(), EncodeError> {
         self.fields[index].set(f)
+    }
+
+    pub fn get(&self, index: usize) -> Result<TupleField, DecodeError> {
+        self.fields[index].get()
     }
 
     pub fn clear(&mut self) {
@@ -141,4 +129,36 @@ impl Tuple {
         }
         path
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        let t = Tuple::from_utf8_path("test/path/to/resource");
+        t.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![
+            0x04,  // 4 tuple fields
+            0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
+            0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
+            0x02, 0x74, 0x6f, // Field 3: "to"
+            0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65]); // Field 4: "resource"
+        let decoded = Tuple::decode(&mut buf).unwrap();
+        assert_eq!(decoded, t);
+
+        // Alternate construction
+        let mut t = Tuple::new();
+        t.add(TupleField::from_utf8("test"));
+        t.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![
+            0x01,  // 1 tuple field
+            0x04, 0x74, 0x65, 0x73, 0x74 ]); // Field 1: "test"
+        let decoded = Tuple::decode(&mut buf).unwrap();
+        assert_eq!(decoded, t);
+}
 }

@@ -1,5 +1,5 @@
 use super::{Version};
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt, Params};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt, KeyValuePairs};
 
 /// Sent by the server in response to a client setup.
 /// This SERVER_SETUP message is used by moq-transport draft versions 11 and later.
@@ -11,7 +11,7 @@ pub struct Server {
 
     /// Setup Parameters, ie: MAX_REQUEST_ID, MAX_AUTH_TOKEN_CACHE_SIZE,
     /// AUTHORIZATION_TOKEN, etc.
-    pub params: Params,
+    pub params: KeyValuePairs,
 }
 
 impl Decode for Server {
@@ -23,11 +23,10 @@ impl Decode for Server {
         }
 
         let _len = u16::decode(r)?;
-
         // TODO: Check the length of the message.
 
         let version = Version::decode(r)?;
-        let params = Params::decode(r)?;
+        let params = KeyValuePairs::decode(r)?;
 
         Ok(Self {
             version,
@@ -72,9 +71,13 @@ mod tests {
     #[test]
     fn encode_decode() {
         let mut buf = BytesMut::new();
+
+        let mut params = KeyValuePairs::default();
+        params.set_intvalue(0x02 /* MaxRequestId */, 1000);
+
         let server = Server {
             version: Version::DRAFT_13,
-            params: Params::default(),
+            params,
         };
 
         server.encode(&mut buf).unwrap();
@@ -83,13 +86,15 @@ mod tests {
             buf.to_vec(),
             vec![
                 0x21,       // Type
-                0x00, 0x09, // Length
+                0x00, 0x0c, // Length
                 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,   // Version DRAFT_13 (0xff00000D)
-                0x00,       // 0 Params
+                0x01,       // 0 Params
+                0x02, 0x43, 0xe8, // Key=2 (MaxRequestId), Value=1000
             ]
         );
 
         let decoded = Server::decode(&mut buf).unwrap();
         assert_eq!(decoded.version, server.version);
+        assert_eq!(decoded.params, server.params);
     }
 }

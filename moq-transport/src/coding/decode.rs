@@ -31,6 +31,7 @@ pub enum DecodeError {
     #[error("invalid message: {0:?}")]
     InvalidMessage(u64),
 
+    // TODO SLG - remove eventually
     #[error("invalid role: {0:?}")]
     InvalidRole(u64),
 
@@ -70,6 +71,12 @@ pub enum DecodeError {
 
     #[error("io error: {0}")]
     Io(sync::Arc<io::Error>),
+
+    #[error("key-value-pair length exceeded")]
+    KeyValuePairLengthExceeded(),
+
+    #[error("field '{0}' too large")]
+    FieldBoundsExceeded(String),
 }
 
 impl From<io::Error> for DecodeError {

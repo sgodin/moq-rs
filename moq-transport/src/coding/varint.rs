@@ -222,8 +222,9 @@ impl Encode for VarInt {
     }
 }
 
-// TODO SLG - I'm not convinced that implementing Encode and Decode traits for these standard types as VarInt's is a good idea.
-//            If the MOQ messages really want to encode a raw u32, u64, or usize, as a non-VarInt, then this won't be good.
+///*
+// TODO SLG - I'm not convinced that implementing Encode and Decode traits for u64 as VarInt's is a good idea.
+//            If the MOQ messages in the future want to encode a raw u64, then this won't be good.
 
 // TODO SLG - Leave these u64 encodings for now, they are used to encode/decode type and length fields.
 // Should eventually change these to use explicit VarInt encoding instead of u64, and remove these.
@@ -240,10 +241,10 @@ impl Decode for u64 {
         VarInt::decode(r).map(|v| v.into_inner())
     }
 }
+//*/
 
-// TODO SLG - Leave these usize encodings for now, they are used to encode/decode length fields in:
-// Params, String, Tuple, Subgroup, Track, and Version encodings.
-// Should eventually change these to use explicit VarInt encoding instead of usize, and remove these.
+// The MOQ specs would never ask us to encode/decode a usize to the wire directly, since it's actual size
+// is depended on 32bit vs 64bit compilations.  These encode/decode methods offer some nice syntactic sugar.
 impl Encode for usize {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
@@ -254,7 +255,9 @@ impl Encode for usize {
 
 impl Decode for usize {
    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        VarInt::decode(r).map(|v| v.into_inner() as usize)
+        let var = VarInt::decode(r)?;
+        // Note: If 32-bit system, then VarInt may not fit into usize
+        Ok(usize::try_from(var).map_err(|_| DecodeError::BoundsExceeded(BoundsExceeded))?)
     }
 }
 
@@ -275,6 +278,19 @@ mod tests {
     }
 
     #[test]
+    fn encode_usize_overflow() {
+        let i: u64 = 4611686018427387904;
+        // This test is only applicable on 64-bit systems
+        if i < usize::MAX as u64 {
+            let i = i as usize;
+            let mut buf = BytesMut::new();
+            let encoded = i.encode(&mut buf);
+            assert!(matches!(encoded.unwrap_err(), EncodeError::BoundsExceeded(_)));
+        }
+    }
+
+    ///*
+    #[test]
     fn encode_decode_u64() {
         let mut buf = BytesMut::new();
 
@@ -293,6 +309,7 @@ mod tests {
         let encoded = i.encode(&mut buf);
         assert!(matches!(encoded.unwrap_err(), EncodeError::BoundsExceeded(_)));
     }
+    //*/
 
     #[test]
     fn encode_decode_varint() {
@@ -356,7 +373,7 @@ mod tests {
         let i = 1073741824;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00 ]); // first 2 bits are 10
+        assert_eq!(buf.to_vec(), vec![ 0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00 ]); // first 2 bits are 11
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -365,7 +382,7 @@ mod tests {
         let i = 4611686018427387903;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff ]); // first 2 bits are 10
+        assert_eq!(buf.to_vec(), vec![ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff ]); // first 2 bits are 11
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
