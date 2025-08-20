@@ -3,7 +3,7 @@ use std::ops;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
-use crate::coding::Encode;
+use crate::coding::{Encode, Location, ReasonPhrase};
 use crate::serve::{ServeError, TrackReaderMode};
 use crate::watch::State;
 use crate::{data, message, serve};
@@ -12,15 +12,16 @@ use super::{Publisher, SessionError, SubscribeInfo, Writer};
 
 #[derive(Debug)]
 struct SubscribedState {
-    max_group_id: Option<(u64, u64)>,
+    max_group_id: Option<Location>,
     closed: Result<(), ServeError>,
 }
 
 impl SubscribedState {
     fn update_max_group_id(&mut self, group_id: u64, object_id: u64) -> Result<(), ServeError> {
-        if let Some((max_group, max_object)) = self.max_group_id {
-            if group_id >= max_group && object_id >= max_object {
-                self.max_group_id = Some((group_id, object_id));
+        if let Some(current_max_group_id) = self.max_group_id {
+            let update_max_group_id = Location::new(group_id, object_id);
+            if update_max_group_id >= current_max_group_id {
+                self.max_group_id = Some(update_max_group_id);
             }
         }
 
@@ -86,9 +87,12 @@ impl Subscribed {
 
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
-            expires: None,
+            track_alias: 0,
+            expires: 3600, // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
-            latest,
+            content_exists: true,  // TODO SLG
+            largest_location: latest,
+            params: Default::default(),
         });
 
         self.ok = true; // So we sent SubscribeDone on drop
@@ -144,20 +148,18 @@ impl Drop for Subscribed {
             .err()
             .cloned()
             .unwrap_or(ServeError::Done);
-        let max_group_id = state.max_group_id;
         drop(state); // Important to avoid a deadlock
 
         if self.ok {
             self.publisher.send_message(message::SubscribeDone {
                 id: self.msg.id,
-                last: max_group_id,
-                code: err.code(),
-                reason: err.to_string(),
+                status_code: err.code(),
+                stream_count: 0,  // TODO SLG
+                reason: ReasonPhrase(err.to_string()),
             });
         } else {
             self.publisher.send_message(message::SubscribeError {
                 id: self.msg.id,
-                alias: 0,
                 code: err.code(),
                 reason: err.to_string(),
             });
@@ -176,7 +178,8 @@ impl Subscribed {
 
         let header: data::Header = data::TrackHeader {
             subscribe_id: self.msg.id,
-            track_alias: self.msg.track_alias,
+            //track_alias: self.msg.track_alias,
+            track_alias: 1, // TODO SLG - we need to get this from somewhere new
             publisher_priority: track.priority,
         }
         .into();
@@ -228,7 +231,8 @@ impl Subscribed {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
                             subscribe_id: self.msg.id,
-                            track_alias: self.msg.track_alias,
+                            //track_alias: self.msg.track_alias,
+                            track_alias: 1, // TODO SLG - we need to get this from somewhere new
                             group_id: subgroup.group_id,
                             subgroup_id: subgroup.subgroup_id,
                             publisher_priority: subgroup.priority,
@@ -306,7 +310,8 @@ impl Subscribed {
         while let Some(datagram) = datagrams.read().await? {
             let datagram = data::Datagram {
                 subscribe_id: self.msg.id,
-                track_alias: self.msg.track_alias,
+                //track_alias: self.msg.track_alias,
+                track_alias: 1, // TODO SLG - we need to get this from somewhere new
                 group_id: datagram.group_id,
                 object_id: datagram.object_id,
                 publisher_priority: datagram.priority,

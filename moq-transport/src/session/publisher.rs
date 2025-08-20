@@ -6,7 +6,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 
 use crate::{
-    coding::Tuple,
+    coding::TrackNamespace,
     message::{self, Message},
     serve::{ServeError, TracksReader},
 };
@@ -22,7 +22,7 @@ use super::{
 pub struct Publisher {
     webtransport: web_transport::Session,
 
-    announces: Arc<Mutex<HashMap<Tuple, AnnounceRecv>>>,
+    announces: Arc<Mutex<HashMap<TrackNamespace, AnnounceRecv>>>,
     subscribed: Arc<Mutex<HashMap<u64, SubscribedRecv>>>,
     unknown: Queue<Subscribed>,
 
@@ -139,13 +139,13 @@ impl Publisher {
             .ok_or(ServeError::NotFound)?;
         let response;
 
-        if let Some((latest_group_id, latest_object_id)) = track.latest() {
+        if let Some(latest) = track.latest() {
             response = message::TrackStatus {
                 track_namespace: track_status_request.info.namespace.clone(),
                 track_name: track_status_request.info.track.clone(),
                 status_code: message::TrackStatusCode::InProgress,
-                last_group_id: latest_group_id,
-                last_object_id: latest_object_id,
+                last_group_id: latest.group_id,
+                last_object_id: latest.object_id,
             };
         } else {
             response = message::TrackStatus {
@@ -303,7 +303,7 @@ impl Publisher {
         self.subscribed.lock().unwrap().remove(&id);
     }
 
-    fn drop_announce(&mut self, namespace: &Tuple) {
+    fn drop_announce(&mut self, namespace: &TrackNamespace) {
         self.announces.lock().unwrap().remove(namespace);
     }
 

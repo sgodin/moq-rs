@@ -1,34 +1,75 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 /// Filter Types
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-04.html#name-filter-types
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FilterType {
-    LatestGroup = 0x1,
-    LatestObject = 0x2,
+    NextGroupStart = 0x1,
+    LargestObject = 0x2,
     AbsoluteStart = 0x3,
     AbsoluteRange = 0x4,
 }
 
 impl Encode for FilterType {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        match self {
-            Self::LatestGroup => (0x1_u64).encode(w),
-            Self::LatestObject => (0x2_u64).encode(w),
-            Self::AbsoluteStart => (0x3_u64).encode(w),
-            Self::AbsoluteRange => (0x4_u64).encode(w),
-        }
+        let val = *self as u8;
+        val.encode(w)?;
+        Ok(())
     }
 }
 
 impl Decode for FilterType {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        match u64::decode(r)? {
-            0x01 => Ok(Self::LatestGroup),
-            0x02 => Ok(Self::LatestObject),
+        match u8::decode(r)? {
+            0x01 => Ok(Self::NextGroupStart),
+            0x02 => Ok(Self::LargestObject),
             0x03 => Ok(Self::AbsoluteStart),
             0x04 => Ok(Self::AbsoluteRange),
             _ => Err(DecodeError::InvalidFilterType),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+    use bytes::Bytes;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        let ft = FilterType::NextGroupStart;
+        ft.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        let decoded = FilterType::decode(&mut buf).unwrap();
+        assert_eq!(decoded, ft);
+
+        let ft = FilterType::LargestObject;
+        ft.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x02 ]);
+        let decoded = FilterType::decode(&mut buf).unwrap();
+        assert_eq!(decoded, ft);
+
+        let ft = FilterType::AbsoluteStart;
+        ft.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x03 ]);
+        let decoded = FilterType::decode(&mut buf).unwrap();
+        assert_eq!(decoded, ft);
+
+        let ft = FilterType::AbsoluteRange;
+        ft.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x04 ]);
+        let decoded = FilterType::decode(&mut buf).unwrap();
+        assert_eq!(decoded, ft);
+    }
+
+
+    #[test]
+    fn decode_bad_value() {
+        let data: Vec<u8> = vec![ 0x05 ];  // Invalid filter type
+        let mut buf: Bytes = data.into();
+        let result = FilterType::decode(&mut buf);
+        assert!(matches!(result, Err(DecodeError::InvalidFilterType)));
     }
 }

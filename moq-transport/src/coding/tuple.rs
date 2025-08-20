@@ -7,6 +7,13 @@ pub struct TupleField {
     pub value: Vec<u8>,
 }
 
+impl TupleField {
+    // Tuples are in MOQ are only used for TrackNamespace. The RFC limits the
+    // total size of the Tracknamespace + TrackName to be 4096 bytes.  So an
+    // individual field should never be larger than 4096 bytes.
+    pub const MAX_VALUE_SIZE: usize = 4096;
+}
+
 impl Hash for TupleField {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.value.hash(state);
@@ -16,6 +23,9 @@ impl Hash for TupleField {
 impl Decode for TupleField {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let size = usize::decode(r)?;
+        if size > Self::MAX_VALUE_SIZE {
+            return Err(DecodeError::FieldBoundsExceeded("TupleField".to_string()));
+        }
         Self::decode_remaining(r, size)?;
         let mut buf = vec![0; size];
         r.copy_to_slice(&mut buf);
@@ -25,6 +35,9 @@ impl Decode for TupleField {
 
 impl Encode for TupleField {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+        if self.value.len() > Self::MAX_VALUE_SIZE {
+            return Err(EncodeError::FieldBoundsExceeded("TupleField".to_string()));
+        }
         self.value.len().encode(w)?;
         Self::encode_remaining(w, self.value.len())?;
         w.put_slice(&self.value);
@@ -135,6 +148,7 @@ impl Tuple {
 mod tests {
     use super::*;
     use bytes::BytesMut;
+    use bytes::Bytes;
 
     #[test]
     fn encode_decode() {
@@ -160,5 +174,28 @@ mod tests {
             0x04, 0x74, 0x65, 0x73, 0x74 ]); // Field 1: "test"
         let decoded = Tuple::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
-}
+    }
+
+    #[test]
+    fn encode_tuplefield_too_large() {
+        let mut buf = BytesMut::new();
+
+        let t = TupleField {
+            value: vec![0; TupleField::MAX_VALUE_SIZE + 1], // Create a field larger than the max size
+        };
+
+        let encoded = t.encode(&mut buf);
+        assert!(matches!(encoded.unwrap_err(), EncodeError::FieldBoundsExceeded(_)));
+    }
+
+    #[test]
+    fn decode_tuplefield_too_large() {
+        let mut data: Vec<u8> = vec![ 0x00; TupleField::MAX_VALUE_SIZE + 1 ];  // Create a vector with 256 bytes
+        // 4097 encoded as VarInt
+        data[0] = 0x50;
+        data[1] = 0x01;
+        let mut buf: Bytes = data.into();
+        let decoded = TupleField::decode(&mut buf);
+        assert!(matches!(decoded.unwrap_err(), DecodeError::FieldBoundsExceeded(_)));
+    }
 }

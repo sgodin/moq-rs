@@ -1,9 +1,4 @@
-// TODO SLG - consider instead of this, adding:
-// - a ReasonPhrase struct that limits length to 1024 bytes - DONE
-// - a FullTrackName struct that limits length to 4096 bytes?
-// - a GoAway URI that limits length to 8192 bytes
-// OR
-// - somehow create a string encoder/decoder that validates various max length constraints
+// TODO SLG - eventually remove this file, bounded_string should now be used instead
 
 use super::{Decode, DecodeError, Encode, EncodeError };
 

@@ -1,7 +1,7 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
 
 
-#[derive(Default, Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Location {
     pub group_id: u64,
     pub object_id: u64,

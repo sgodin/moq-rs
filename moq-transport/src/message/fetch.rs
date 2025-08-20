@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params, TrackNamespace};
 use crate::message::GroupOrder;
 
 /// Sent by the subscriber to request to request a range
@@ -9,7 +9,7 @@ pub struct Fetch {
     pub id: u64,
 
     /// Track properties
-    pub track_namespace: Tuple,
+    pub track_namespace: TrackNamespace,
     pub track_name: String,
 
     /// Subscriber Priority
@@ -31,7 +31,7 @@ impl Decode for Fetch {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
 
-        let track_namespace = Tuple::decode(r)?;
+        let track_namespace = TrackNamespace::decode(r)?;
         let track_name = String::decode(r)?;
 
         let subscriber_priority = u8::decode(r)?;

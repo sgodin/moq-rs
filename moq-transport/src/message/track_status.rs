@@ -1,10 +1,10 @@
 use super::TrackStatusCode;
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
 
 #[derive(Clone, Debug)]
 pub struct TrackStatus {
     /// Track Namespace
-    pub track_namespace: Tuple,
+    pub track_namespace: TrackNamespace,
     /// Track Name
     pub track_name: String,
     /// Status Code
@@ -18,7 +18,7 @@ pub struct TrackStatus {
 impl Decode for TrackStatus {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         Ok(Self {
-            track_namespace: Tuple::decode(r)?,
+            track_namespace: TrackNamespace::decode(r)?,
             track_name: String::decode(r)?,
             status_code: TrackStatusCode::decode(r)?,
             last_group_id: u64::decode(r)?,

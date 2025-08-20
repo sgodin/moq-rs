@@ -1,11 +1,11 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
 
 /// Subscribe Namespace Error
 /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-06.html#name-subscribe_namespace_error
 #[derive(Clone, Debug)]
 pub struct SubscribeNamespaceError {
     // Echo back the namespace that was reset
-    pub namespace_prefix: Tuple,
+    pub namespace_prefix: TrackNamespace,
 
     // An error code.
     pub code: u64,
@@ -16,7 +16,7 @@ pub struct SubscribeNamespaceError {
 
 impl Decode for SubscribeNamespaceError {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let namespace_prefix = Tuple::decode(r)?;
+        let namespace_prefix = TrackNamespace::decode(r)?;
         let code = u64::decode(r)?;
         let reason = String::decode(r)?;
 

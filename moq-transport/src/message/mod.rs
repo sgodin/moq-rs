@@ -43,8 +43,9 @@ mod fetch_ok;
 mod filter_type;
 mod go_away;
 mod group_order;
-mod max_subscribe_id;
+mod max_request_id;
 mod publisher;
+mod requests_blocked;
 mod subscribe;
 mod subscribe_done;
 mod subscribe_error;
@@ -71,7 +72,8 @@ pub use fetch_ok::*;
 pub use filter_type::*;
 pub use go_away::*;
 pub use group_order::*;
-pub use max_subscribe_id::*;
+pub use max_request_id::*;
+pub use requests_blocked::*;
 pub use publisher::*;
 pub use subscribe::*;
 pub use subscribe_done::*;
@@ -194,7 +196,7 @@ message_types! {
     SubscribeOk = 0x4,
     SubscribeError = 0x5,
     SubscribeDone = 0xb,
-    MaxSubscribeId = 0x15,
+    MaxRequestId = 0x15,
 
     // ANNOUNCE family, sent by publisher
     Announce = 0x6,
@@ -225,6 +227,8 @@ message_types! {
     FetchCancel = 0x17,
     FetchOk = 0x18,
     FetchError = 0x19,
+
+    RequestsBlocked = 0x1a,
 }
 
 /// Track Status Codes

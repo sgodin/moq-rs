@@ -7,7 +7,8 @@ mod varint;
 mod integer;
 mod kvp;
 mod location;
-mod reason_phrase;
+mod bounded_string;
+mod track_namespace;
 
 pub use decode::*;
 pub use encode::*;
@@ -16,4 +17,5 @@ pub use tuple::*;
 pub use varint::*;
 pub use kvp::*;
 pub use location::*;
-pub use reason_phrase::*;
+pub use bounded_string::*;
+pub use track_namespace::*;

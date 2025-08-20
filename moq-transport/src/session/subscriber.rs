@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    coding::{Decode, Tuple},
+    coding::{Decode, TrackNamespace},
     data,
     message::{self, Message},
     serve::{self, ServeError},
@@ -18,7 +18,7 @@ use super::{Announced, AnnouncedRecv, Reader, Session, SessionError, Subscribe, 
 // TODO remove Clone.
 #[derive(Clone)]
 pub struct Subscriber {
-    announced: Arc<Mutex<HashMap<Tuple, AnnouncedRecv>>>,
+    announced: Arc<Mutex<HashMap<TrackNamespace, AnnouncedRecv>>>,
     announced_queue: Queue<Announced>,
 
     subscribes: Arc<Mutex<HashMap<u64, SubscribeRecv>>>,
@@ -84,7 +84,7 @@ impl Subscriber {
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::SubscribeDone(msg) => self.recv_subscribe_done(msg),
-            message::Publisher::MaxSubscribeId(msg) => self.recv_max_subscribe_id(msg),
+            message::Publisher::MaxRequestId(msg) => self.recv_max_request_id(msg),
             message::Publisher::TrackStatus(msg) => self.recv_track_status(msg),
             // TODO: Implement fetch messages
             message::Publisher::FetchOk(_msg) => todo!(),
@@ -144,15 +144,15 @@ impl Subscriber {
 
     fn recv_subscribe_done(&mut self, msg: &message::SubscribeDone) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
-            subscribe.error(ServeError::Closed(msg.code))?;
+            subscribe.error(ServeError::Closed(msg.status_code))?;
         }
 
         Ok(())
     }
 
-    fn recv_max_subscribe_id(
+    fn recv_max_request_id(
         &mut self,
-        _msg: &message::MaxSubscribeId,
+        _msg: &message::MaxRequestId,
     ) -> Result<(), SessionError> {
         // TODO: The Maximum Subscribe Id MUST only increase within a session,
         // and receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller
@@ -168,7 +168,7 @@ impl Subscriber {
         Ok(())
     }
 
-    fn drop_announce(&mut self, namespace: &Tuple) {
+    fn drop_announce(&mut self, namespace: &TrackNamespace) {
         self.announced.lock().unwrap().remove(namespace);
     }
 

@@ -1,15 +1,15 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
 
 /// Sent by the publisher to terminate an Announce.
 #[derive(Clone, Debug)]
 pub struct Unannounce {
     // Echo back the namespace that was reset
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
 }
 
 impl Decode for Unannounce {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let namespace = Tuple::decode(r)?;
+        let namespace = TrackNamespace::decode(r)?;
 
         Ok(Self { namespace })
     }

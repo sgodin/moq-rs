@@ -1,16 +1,16 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
 
 /// Sent by the subscriber to accept an Announce.
 #[derive(Clone, Debug)]
 pub struct AnnounceOk {
     // Echo back the namespace that was announced.
     // TODO Propose using an ID to save bytes.
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
 }
 
 impl Decode for AnnounceOk {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let namespace = Tuple::decode(r)?;
+        let namespace = TrackNamespace::decode(r)?;
         Ok(Self { namespace })
     }
 }

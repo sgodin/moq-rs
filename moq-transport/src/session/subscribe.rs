@@ -1,9 +1,9 @@
 use std::ops;
 
 use crate::{
-    coding::Tuple,
+    coding::TrackNamespace,
     data,
-    message::{self, FilterType, GroupOrder, SubscribeLocation, SubscribePair},
+    message::{self, FilterType, GroupOrder},
     serve::{self, ServeError, TrackWriter, TrackWriterMode},
 };
 
@@ -13,7 +13,7 @@ use super::Subscriber;
 
 #[derive(Debug, Clone)]
 pub struct SubscribeInfo {
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
     pub name: String,
 }
 
@@ -49,22 +49,15 @@ impl Subscribe {
     ) -> (Subscribe, SubscribeRecv) {
         subscriber.send_message(message::Subscribe {
             id,
-            track_alias: id,
             track_namespace: track.namespace.clone(),
             track_name: track.name.clone(),
             // TODO add prioritization logic on the publisher side
             subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
             group_order: GroupOrder::Publisher, // defer to publisher send order
-            filter_type: FilterType::LatestGroup,
-            // TODO add these to the publisher.
-            start: Some(SubscribePair {
-                group: SubscribeLocation::Latest(0),
-                object: SubscribeLocation::Absolute(0),
-            }),
-            end: Some(SubscribePair {
-                group: SubscribeLocation::None,
-                object: SubscribeLocation::None,
-            }),
+            forward: true,  // default to forwarding objects
+            filter_type: FilterType::NextGroupStart,
+            start_location: None,
+            end_group_id: None,
             params: Default::default(),
         });
 

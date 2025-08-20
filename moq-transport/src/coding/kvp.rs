@@ -29,24 +29,24 @@ impl KeyValuePair {
 
 impl Decode for KeyValuePair {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let key = VarInt::decode(r)?;
+        let key = VarInt::decode(r)?.into_inner();
 
-        if key.into_inner() % 2 == 0 {
+        if key % 2 == 0 {
             // VarInt variant
-            let value = VarInt::decode(r)?;
-            Ok(KeyValuePair::new_int(key.into_inner(), value.into_inner()))
+            let value = VarInt::decode(r)?.into_inner();
+            Ok(KeyValuePair::new_int(key, value))
         } else {
             // Bytes variant
-            let length = VarInt::decode(r)?;
-            if length.into_inner() > u16::MAX as u64 {
+            let length = usize::decode(r)?;
+            if length > u16::MAX as usize {
                 return Err(DecodeError::KeyValuePairLengthExceeded());
             }
-            let length = length.into_inner() as usize;  // won't fail due to previous check
+            let length = length as usize;  // won't fail due to previous check
 
             Self::decode_remaining(r, length)?;
             let mut buf = vec![0; length];
             r.copy_to_slice(&mut buf);
-            Ok(KeyValuePair::new_bytes(key.into_inner(), buf))
+            Ok(KeyValuePair::new_bytes(key, buf))
         }
     }
 }
@@ -109,8 +109,8 @@ impl Decode for KeyValuePairs {
     fn decode<R: bytes::Buf>(mut r: &mut R) -> Result<Self, DecodeError> {
         let mut kvps = HashMap::new();
 
-        let count = VarInt::decode(r)?;
-        for _ in 0..count.into_inner() {
+        let count = VarInt::decode(r)?.into_inner();
+        for _ in 0..count {
             let kvp = KeyValuePair::decode(&mut r)?;
             if kvps.contains_key(&kvp.key) {
                 return Err(DecodeError::DupliateParameter);

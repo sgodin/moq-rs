@@ -18,19 +18,19 @@ use super::{
     Datagrams, DatagramsReader, DatagramsWriter, ObjectsWriter, ServeError, Stream, StreamReader,
     StreamWriter, Subgroups, SubgroupsReader, SubgroupsWriter,
 };
-use crate::coding::Tuple;
+use crate::coding::{TrackNamespace, Location};
 use paste::paste;
 use std::{ops::Deref, sync::Arc};
 
 /// Static information about a track.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Track {
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
     pub name: String,
 }
 
 impl Track {
-    pub fn new(namespace: Tuple, name: String) -> Self {
+    pub fn new(namespace: TrackNamespace, name: String) -> Self {
         Self { namespace, name }
     }
 
@@ -156,7 +156,7 @@ impl TrackReader {
     }
 
     // Returns the largest group/sequence
-    pub fn latest(&self) -> Option<(u64, u64)> {
+    pub fn latest(&self) -> Option<Location> {
         // We don't even know the mode yet.
         // TODO populate from SUBSCRIBE_OK
         None

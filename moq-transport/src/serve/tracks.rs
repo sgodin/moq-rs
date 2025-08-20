@@ -13,17 +13,17 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use super::{ServeError, Track, TrackReader, TrackWriter};
-use crate::coding::Tuple;
+use crate::coding::TrackNamespace;
 use crate::watch::{Queue, State};
 
 /// Static information about a broadcast.
 #[derive(Debug)]
 pub struct Tracks {
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
 }
 
 impl Tracks {
-    pub fn new(namespace: Tuple) -> Self {
+    pub fn new(namespace: TrackNamespace) -> Self {
         Self { namespace }
     }
 

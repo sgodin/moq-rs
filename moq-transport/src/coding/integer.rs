@@ -27,8 +27,32 @@ impl Encode for u16 {
 
 impl Decode for u16 {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        Self::decode_remaining(r, 1)?;
+        Self::decode_remaining(r, 2)?;
         Ok(r.get_u16())
+    }
+}
+
+impl Encode for bool {
+    /// Encode a bool as u8 to the given writer.
+    fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+        let x = *self;
+        match x {
+            true => w.put_u8(1),
+            false => w.put_u8(0),
+        }
+        Ok(())
+    }
+}
+
+impl Decode for bool {
+    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+        Self::decode_remaining(r, 1)?;
+        let forward_byte = u8::decode(r)?;
+        match forward_byte {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(DecodeError::InvalidValue),
+        }
     }
 }
 
@@ -36,6 +60,7 @@ impl Decode for u16 {
 mod tests {
     use super::*;
     use bytes::BytesMut;
+    use bytes::Bytes;
 
     #[test]
     fn encode_decode_u8() {
@@ -57,5 +82,24 @@ mod tests {
         assert_eq!(buf.to_vec(), vec![ 0xff, 0xfe ]);
         let decoded = u16::decode(&mut buf).unwrap();
         assert_eq!(decoded, i);
+    }
+
+    #[test]
+    fn encode_decode_bool() {
+        let mut buf = BytesMut::new();
+
+        let b = true;
+        b.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        let decoded = bool::decode(&mut buf).unwrap();
+        assert_eq!(decoded, b);
+    }
+
+    #[test]
+    fn decode_invalid_bool() {
+        let data: Vec<u8> = vec![ 0x02 ];  // Invalid value for bool
+        let mut buf: Bytes = data.into();
+        let decoded = bool::decode(&mut buf);
+        assert!(matches!(decoded.unwrap_err(), DecodeError::InvalidValue));
     }
 }

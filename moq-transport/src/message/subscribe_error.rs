@@ -11,9 +11,6 @@ pub struct SubscribeError {
 
     // An optional, human-readable reason.
     pub reason: String,
-
-    /// An optional track alias, only used when error == Retry Track Alias
-    pub alias: u64,
 }
 
 impl Decode for SubscribeError {
@@ -21,13 +18,11 @@ impl Decode for SubscribeError {
         let id = u64::decode(r)?;
         let code = u64::decode(r)?;
         let reason = String::decode(r)?;
-        let alias = u64::decode(r)?;
 
         Ok(Self {
             id,
             code,
             reason,
-            alias,
         })
     }
 }
@@ -37,7 +32,6 @@ impl Encode for SubscribeError {
         self.id.encode(w)?;
         self.code.encode(w)?;
         self.reason.encode(w)?;
-        self.alias.encode(w)?;
 
         Ok(())
     }
