@@ -90,7 +90,7 @@ impl Subscribed {
             track_alias: 0,
             expires: 3600, // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
-            content_exists: true,  // TODO SLG
+            content_exists: latest.is_some(),
             largest_location: latest,
             params: Default::default(),
         });
