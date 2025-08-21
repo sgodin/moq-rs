@@ -8,10 +8,8 @@ use std::fmt;
 pub struct Version(pub u32);
 
 impl Version {
-    // TODO SLG - eventually remove this version, since we won't ever parse it
-    //            given that we only parse CLIENT_SETUP messages with id 0x20
-    /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-07.html
-    pub const DRAFT_07: Version = Version(0xff000007);
+    /// Note: older draft versions are NOT included here, as we will no longer
+    ///       handle the old SETUP message type numbers of (0x40 and 0x41)
 
     /// First version we might see in CLIENT_SETUP (0x20) or SERVER_SETUP (0x21)
     /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-11.html
@@ -75,10 +73,10 @@ pub struct Versions(Vec<Version>);
 impl Decode for Versions {
     /// Decode the version list.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let count = VarInt::decode(r)?;
+        let count = usize::decode(r)?;
         let mut vs = Vec::new();
 
-        for _ in 0..count.into_inner() {
+        for _ in 0..count {
             let v = Version::decode(r)?;
             vs.push(v);
         }
@@ -90,7 +88,7 @@ impl Decode for Versions {
 impl Encode for Versions {
     /// Encode the version list.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.0.len())?.encode(w)?;
+        self.0.len().encode(w)?;
 
         for v in &self.0 {
             v.encode(w)?;
@@ -130,7 +128,7 @@ mod tests {
         let mut buf = BytesMut::new();
         let versions = Versions(vec![
             Version(1),
-            Version::DRAFT_07,
+            Version::DRAFT_12,
             Version::DRAFT_13,
         ]);
 
@@ -140,8 +138,8 @@ mod tests {
             vec![
                 0x03,  // 3 Versions
                 0x01,  // Version 1
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x07,   // Version DRAFT_07 (0xff000007)
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,   // Version DRAFT_07 (0xff00000d)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0C,   // Version DRAFT_12 (0xff00000c)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,   // Version DRAFT_13 (0xff00000d)
             ]
         );
 

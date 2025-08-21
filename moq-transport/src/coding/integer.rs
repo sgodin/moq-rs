@@ -20,6 +20,7 @@ impl Encode for u16 {
     /// Encode a u16 to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         let x = *self;
+        Self::encode_remaining(w, 2)?;
         w.put_u16(x);
         Ok(())
     }
@@ -35,6 +36,7 @@ impl Decode for u16 {
 impl Encode for bool {
     /// Encode a bool as u8 to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+        Self::encode_remaining(w, 1)?;
         let x = *self;
         match x {
             true => w.put_u8(1),

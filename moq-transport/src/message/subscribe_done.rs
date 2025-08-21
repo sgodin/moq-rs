@@ -1,4 +1,6 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt, ReasonPhrase};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, ReasonPhrase};
+
+// TODO SLG - add an enum for status_codes
 
 /// Sent by the publisher to cleanly terminate a Subscription.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,9 +20,9 @@ pub struct SubscribeDone {
 
 impl Decode for SubscribeDone {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let id = VarInt::decode(r)?.into_inner();
-        let status_code = VarInt::decode(r)?.into_inner();
-        let stream_count = VarInt::decode(r)?.into_inner();
+        let id = u64::decode(r)?;
+        let status_code = u64::decode(r)?;
+        let stream_count = u64::decode(r)?;
         let reason = ReasonPhrase::decode(r)?;
 
         Ok(Self {
@@ -34,9 +36,9 @@ impl Decode for SubscribeDone {
 
 impl Encode for SubscribeDone {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.id)?.encode(w)?;
-        VarInt::try_from(self.status_code)?.encode(w)?;
-        VarInt::try_from(self.stream_count)?.encode(w)?;
+        self.id.encode(w)?;
+        self.status_code.encode(w)?;
+        self.stream_count.encode(w)?;
         self.reason.encode(w)?;
 
         Ok(())

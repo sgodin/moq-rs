@@ -222,17 +222,12 @@ impl Encode for VarInt {
     }
 }
 
-///*
-// TODO SLG - I'm not convinced that implementing Encode and Decode traits for u64 as VarInt's is a good idea.
-//            If the MOQ messages in the future want to encode a raw u64, then this won't be good.
-
-// TODO SLG - Leave these u64 encodings for now, they are used to encode/decode type and length fields.
-// Should eventually change these to use explicit VarInt encoding instead of u64, and remove these.
+// It is doubtful the MOQ specs would ever ask us to encode/decode a u64 to the wire directly without
+// VarInt encoding. These encode/decode methods offer some nice syntactic sugar.
 impl Encode for u64 {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let var = VarInt::try_from(*self)?;
-        var.encode(w)
+        VarInt::try_from(*self)?.encode(w)
     }
 }
 
@@ -241,10 +236,10 @@ impl Decode for u64 {
         VarInt::decode(r).map(|v| v.into_inner())
     }
 }
-//*/
 
-// The MOQ specs would never ask us to encode/decode a usize to the wire directly, since it's actual size
-// is depended on 32bit vs 64bit compilations.  These encode/decode methods offer some nice syntactic sugar.
+// The MOQ specs would never ask us to encode/decode a usize to the wire directly without VarInt
+// encoding, since it's actual size is depended on 32bit vs 64bit compilations.  These encode/decode
+// methods offer some nice syntactic sugar.
 impl Encode for usize {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
@@ -289,7 +284,6 @@ mod tests {
         }
     }
 
-    ///*
     #[test]
     fn encode_decode_u64() {
         let mut buf = BytesMut::new();
@@ -309,7 +303,6 @@ mod tests {
         let encoded = i.encode(&mut buf);
         assert!(matches!(encoded.unwrap_err(), EncodeError::BoundsExceeded(_)));
     }
-    //*/
 
     #[test]
     fn encode_decode_varint() {

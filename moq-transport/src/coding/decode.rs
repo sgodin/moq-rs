@@ -31,24 +31,20 @@ pub enum DecodeError {
     #[error("invalid message: {0:?}")]
     InvalidMessage(u64),
 
-    // TODO SLG - remove eventually
-    #[error("invalid role: {0:?}")]
-    InvalidRole(u64),
-
     #[error("invalid subscribe location")]
     InvalidSubscribeLocation,
 
     #[error("invalid filter type")]
     InvalidFilterType,
 
+    #[error("invalid fetch type")]
+    InvalidFetchType,
+
     #[error("invalid group order")]
     InvalidGroupOrder,
 
     #[error("invalid object status")]
     InvalidObjectStatus,
-
-    #[error("invalid track status code")]
-    InvalidTrackStatusCode,
 
     #[error("missing field")]
     MissingField,

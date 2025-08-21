@@ -3,8 +3,8 @@ use crate::message::GroupOrder;
 
 /// Sent by the publisher to accept a Subscribe.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubscribeOk {
-    /// The request ID of the SUBSCRIBE this message is replying to
+pub struct TrackStatusOk {
+    /// The request ID of the TRACK_STATUS this message is replying to
     pub id: u64,
 
     /// The identifier used for this track in Subgroups or Datagrams.
@@ -25,7 +25,7 @@ pub struct SubscribeOk {
     pub params: KeyValuePairs,
 }
 
-impl Decode for SubscribeOk {
+impl Decode for TrackStatusOk {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
         let track_alias = u64::decode(r)?;
@@ -50,7 +50,7 @@ impl Decode for SubscribeOk {
     }
 }
 
-impl Encode for SubscribeOk {
+impl Encode for TrackStatusOk {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
         self.track_alias.encode(w)?;
@@ -83,7 +83,7 @@ mod tests {
         let mut kvps = KeyValuePairs::new();
         kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
 
-        let msg = SubscribeOk {
+        let msg = TrackStatusOk {
             id: 12345,
             track_alias: 100,
             expires: 3600,
@@ -93,7 +93,7 @@ mod tests {
             params: kvps.clone(),
         };
         msg.encode(&mut buf).unwrap();
-        let decoded = SubscribeOk::decode(&mut buf).unwrap();
+        let decoded = TrackStatusOk::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
     }
 
@@ -101,7 +101,7 @@ mod tests {
     fn encode_missing_fields() {
         let mut buf = BytesMut::new();
 
-        let msg = SubscribeOk {
+        let msg = TrackStatusOk {
             id: 12345,
             track_alias: 100,
             expires: 3600,

@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 
 use crate::{
     coding::TrackNamespace,
-    message::{self, Message},
+    message::{self, GroupOrder, Message},
     serve::{ServeError, TracksReader},
 };
 
@@ -101,9 +101,9 @@ impl Publisher {
                             let tracks = tracks.clone();
 
                             status_tasks.push(async move {
-                                let info = status.info.clone();
+                                let request_msg = status.request_msg.clone();
                                 if let Err(err) = Self::serve_track_status(status, tracks).await {
-                                    log::warn!("failed serving track status request: {:?}, error: {}", info, err)
+                                    log::warn!("failed serving track status request: {:?}, error: {}", request_msg, err)
                                 }
                             });
                         },
@@ -135,27 +135,32 @@ impl Publisher {
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
         let track = tracks
-            .subscribe(&track_status_request.info.track.clone())
+            .subscribe(&track_status_request.request_msg.track_name.clone())
             .ok_or(ServeError::NotFound)?;
         let response;
 
         if let Some(latest) = track.latest() {
-            response = message::TrackStatus {
-                track_namespace: track_status_request.info.namespace.clone(),
-                track_name: track_status_request.info.track.clone(),
-                status_code: message::TrackStatusCode::InProgress,
-                last_group_id: latest.group_id,
-                last_object_id: latest.object_id,
+            response = message::TrackStatusOk {
+                id: track_status_request.request_msg.id,
+                track_alias: 0, // TODO SLG - wire up track alias logic
+                expires: 3600, // TODO SLG
+                group_order: GroupOrder::Ascending, // TODO SLG
+                content_exists: true,
+                largest_location: Some(latest),
+                params: Default::default(),
             };
         } else {
-            response = message::TrackStatus {
-                track_namespace: track_status_request.info.namespace.clone(),
-                track_name: track_status_request.info.track.clone(),
-                status_code: message::TrackStatusCode::DoesNotExist,
-                last_group_id: 0,
-                last_object_id: 0,
+            response = message::TrackStatusOk {
+                id: track_status_request.request_msg.id,
+                track_alias: 0, // TODO SLG - wire up track alias logic
+                expires: 3600, // TODO SLG
+                group_order: GroupOrder::Ascending, // TODO SLG
+                content_exists: false,
+                largest_location: None,
+                params: Default::default(),
             };
         }
+
         // TODO: can we know of any other statuses in this context?
 
         track_status_request.respond(response).await?;
@@ -176,7 +181,7 @@ impl Publisher {
             message::Subscriber::Subscribe(msg) => self.recv_subscribe(msg),
             message::Subscriber::Unsubscribe(msg) => self.recv_unsubscribe(msg),
             message::Subscriber::SubscribeUpdate(msg) => self.recv_subscribe_update(msg),
-            message::Subscriber::TrackStatusRequest(msg) => self.recv_track_status_request(msg),
+            message::Subscriber::TrackStatus(msg) => self.recv_track_status(msg),
             // TODO: Implement namespace messages.
             message::Subscriber::SubscribeNamespace(_msg) => unimplemented!(),
             message::Subscriber::SubscribeNamespaceOk(_msg) => unimplemented!(),
@@ -185,6 +190,9 @@ impl Publisher {
             // TODO: Implement fetch messages
             message::Subscriber::Fetch(_msg) => todo!(),
             message::Subscriber::FetchCancel(_msg) => todo!(),
+            // TODO: Implement publish messages
+            message::Subscriber::PublishOk(_msg) => todo!(),
+            message::Subscriber::PublishError(_msg) => todo!(),
         };
 
         if let Err(err) = res {
@@ -194,18 +202,20 @@ impl Publisher {
         Ok(())
     }
 
-    fn recv_announce_ok(&mut self, msg: message::AnnounceOk) -> Result<(), SessionError> {
-        if let Some(announce) = self.announces.lock().unwrap().get_mut(&msg.namespace) {
-            announce.recv_ok()?;
-        }
+    fn recv_announce_ok(&mut self, _msg: message::AnnounceOk) -> Result<(), SessionError> {
+        // TODO SLG - need to map msg.id to announces which are indexed by namespace
+        //if let Some(announce) = self.announces.lock().unwrap().get_mut(&msg.namespace) {
+        //    announce.recv_ok()?;
+        //}
 
         Ok(())
     }
 
-    fn recv_announce_error(&mut self, msg: message::AnnounceError) -> Result<(), SessionError> {
-        if let Some(announce) = self.announces.lock().unwrap().remove(&msg.namespace) {
-            announce.recv_error(ServeError::Closed(msg.error_code))?;
-        }
+    fn recv_announce_error(&mut self, _msg: message::AnnounceError) -> Result<(), SessionError> {
+        // TODO SLG - need to map msg.id to announces which are indexed by namespace
+        //if let Some(announce) = self.announces.lock().unwrap().remove(&msg.namespace) {
+        //    announce.recv_error(ServeError::Closed(msg.error_code))?;
+        //}
 
         Ok(())
     }
@@ -213,7 +223,7 @@ impl Publisher {
     fn recv_announce_cancel(&mut self, msg: message::AnnounceCancel) -> Result<(), SessionError> {
         // TODO: If a publisher receives new subscriptions for that namespace after receiving an ANNOUNCE_CANCEL,
         // it SHOULD close the session as a 'Protocol Violation'.
-        if let Some(announce) = self.announces.lock().unwrap().remove(&msg.namespace) {
+        if let Some(announce) = self.announces.lock().unwrap().remove(&msg.track_namespace) {
             announce.recv_error(ServeError::Cancel)?;
         }
 
@@ -261,9 +271,9 @@ impl Publisher {
         Err(SessionError::Internal)
     }
 
-    fn recv_track_status_request(
+    fn recv_track_status(
         &mut self,
-        msg: message::TrackStatusRequest,
+        msg: message::TrackStatus,
     ) -> Result<(), SessionError> {
         let namespace = msg.track_namespace.clone();
 
@@ -292,7 +302,7 @@ impl Publisher {
         match &msg {
             message::Publisher::SubscribeDone(msg) => self.drop_subscribe(msg.id),
             message::Publisher::SubscribeError(msg) => self.drop_subscribe(msg.id),
-            message::Publisher::Unannounce(msg) => self.drop_announce(&msg.namespace),
+            message::Publisher::Unannounce(msg) => self.drop_announce(&msg.track_namespace),
             _ => (),
         };
 

@@ -1,5 +1,5 @@
 use super::{Versions};
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, VarInt};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
 
 /// Sent by the client to setup the session.
 /// This CLIENT_SETUP message is used by moq-transport draft versions 11 and later.
@@ -17,9 +17,9 @@ pub struct Client {
 impl Decode for Client {
     /// Decode a client setup message.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let typ = VarInt::decode(r)?;
-        if typ.into_inner() != 0x20 {   // CLIENT_SETUP message ID for draft versions 11 and later
-            return Err(DecodeError::InvalidMessage(typ.into_inner()));
+        let typ = u64::decode(r)?;
+        if typ != 0x20 {   // CLIENT_SETUP message ID for draft versions 11 and later
+            return Err(DecodeError::InvalidMessage(typ));
         }
 
         let _len = u16::decode(r)?;
@@ -38,7 +38,7 @@ impl Decode for Client {
 impl Encode for Client {
     /// Encode a server setup message.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::from_u32(0x20).encode(w)?; // CLIENT_SETUP message ID for draft versions 11 and later
+        (0x20_u64).encode(w)?; // CLIENT_SETUP message ID for draft versions 11 and later
 
         // Find out the length of the message
         // by encoding it into a buffer and then encoding the length.
@@ -58,6 +58,7 @@ impl Encode for Client {
 
         // At least don't encode the message twice.
         // Instead, write the buffer directly to the writer.
+        Self::encode_remaining(w, buf.len())?;
         w.put_slice(&buf);
 
         Ok(())

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Value {
@@ -29,11 +29,11 @@ impl KeyValuePair {
 
 impl Decode for KeyValuePair {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let key = VarInt::decode(r)?.into_inner();
+        let key = u64::decode(r)?;
 
         if key % 2 == 0 {
             // VarInt variant
-            let value = VarInt::decode(r)?.into_inner();
+            let value = u64::decode(r)?;
             Ok(KeyValuePair::new_int(key, value))
         } else {
             // Bytes variant
@@ -58,15 +58,15 @@ impl Encode for KeyValuePair {
                 if(self.key % 2) != 0 {  // key must be even for IntValue
                     return Err(EncodeError::InvalidValue);
                 }
-                VarInt::try_from(self.key)?.encode(w)?;
-                VarInt::try_from(*v)?.encode(w)?;
+                self.key.encode(w)?;
+                (*v).encode(w)?;
                 Ok(())
             }
             Value::BytesValue(v) => {
                 if(self.key % 2) == 0 {  // key must be odd for BytesValue
                     return Err(EncodeError::InvalidValue);
                 }
-                VarInt::try_from(self.key)?.encode(w)?;
+                self.key.encode(w)?;
                 v.len().encode(w)?;
                 Self::encode_remaining(w, v.len())?;
                 w.put_slice(v);
@@ -109,7 +109,7 @@ impl Decode for KeyValuePairs {
     fn decode<R: bytes::Buf>(mut r: &mut R) -> Result<Self, DecodeError> {
         let mut kvps = HashMap::new();
 
-        let count = VarInt::decode(r)?.into_inner();
+        let count = u64::decode(r)?;
         for _ in 0..count {
             let kvp = KeyValuePair::decode(&mut r)?;
             if kvps.contains_key(&kvp.key) {

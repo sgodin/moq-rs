@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, VarInt, Location};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location};
 
 /// Sent by the subscriber to request all future objects for the given track.
 ///
@@ -25,10 +25,10 @@ pub struct SubscribeUpdate {
 
 impl Decode for SubscribeUpdate {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let id = VarInt::decode(r)?.into_inner();
+        let id = u64::decode(r)?;
 
         let start_location = Location::decode(r)?;
-        let end_group_id = VarInt::decode(r)?.into_inner();
+        let end_group_id = u64::decode(r)?;
 
         let subscriber_priority = u8::decode(r)?;
 
@@ -49,10 +49,10 @@ impl Decode for SubscribeUpdate {
 
 impl Encode for SubscribeUpdate {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.id)?.encode(w)?;
+        self.id.encode(w)?;
 
         self.start_location.encode(w)?;
-        VarInt::try_from(self.end_group_id)?.encode(w)?;
+        self.end_group_id.encode(w)?;
 
         self.subscriber_priority.encode(w)?;
 

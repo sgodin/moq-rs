@@ -1,6 +1,6 @@
 // TODO SLG - eventually remove this file, bounded_string should now be used instead
 
-use super::{Decode, DecodeError, Encode, EncodeError };
+use super::{Decode, DecodeError, Encode, EncodeError};
 
 impl Encode for String {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {

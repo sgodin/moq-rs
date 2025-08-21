@@ -40,10 +40,14 @@ mod fetch;
 mod fetch_cancel;
 mod fetch_error;
 mod fetch_ok;
+mod fetch_type;
 mod filter_type;
 mod go_away;
 mod group_order;
 mod max_request_id;
+mod publish;
+mod publish_ok;
+mod publish_error;
 mod publisher;
 mod requests_blocked;
 mod subscribe;
@@ -56,7 +60,8 @@ mod subscribe_ok;
 mod subscribe_update;
 mod subscriber;
 mod track_status;
-mod track_status_request;
+mod track_status_ok;
+mod track_status_error;
 mod unannounce;
 mod unsubscribe;
 mod unsubscribe_namespace;
@@ -69,11 +74,15 @@ pub use fetch::*;
 pub use fetch_cancel::*;
 pub use fetch_error::*;
 pub use fetch_ok::*;
+pub use fetch_type::*;
 pub use filter_type::*;
 pub use go_away::*;
 pub use group_order::*;
 pub use max_request_id::*;
 pub use requests_blocked::*;
+pub use publish::*;
+pub use publish_ok::*;
+pub use publish_error::*;
 pub use publisher::*;
 pub use subscribe::*;
 pub use subscribe_done::*;
@@ -85,7 +94,8 @@ pub use subscribe_ok::*;
 pub use subscribe_update::*;
 pub use subscriber::*;
 pub use track_status::*;
-pub use track_status_request::*;
+pub use track_status_ok::*;
+pub use track_status_error::*;
 pub use unannounce::*;
 pub use unsubscribe::*;
 pub use unsubscribe_namespace::*;
@@ -106,7 +116,7 @@ macro_rules! message_types {
 		impl Decode for Message {
 			fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
 				let t = u64::decode(r)?;
-				let _len = u64::decode(r)?;
+				let _len = u16::decode(r)?;
 
 				// TODO: Check the length of the message.
 
@@ -129,12 +139,18 @@ macro_rules! message_types {
 						// Find out the length of the message
 						// by encoding it into a buffer and then encoding the length.
 						// This is a bit wasteful, but it's the only way to know the length.
+                        // TODO SLG - perhaps we can store the position of the Length field in the BufMut and
+                        //       write the length later, to avoid the copy of the message bytes?
 						let mut buf = Vec::new();
 						m.encode(&mut buf).unwrap();
-						(buf.len() as u64).encode(w)?;
+                        if buf.len() > u16::MAX as usize {
+                            return Err(EncodeError::MsgBoundsExceeded);
+                        }
+                        (buf.len() as u16).encode(w)?;
 
 						// At least don't encode the message twice.
 						// Instead, write the buffer directly to the writer.
+                        Self::encode_remaining(w, buf.len())?;
 						w.put_slice(&buf);
 						Ok(())
 					},)*
@@ -207,11 +223,10 @@ message_types! {
     AnnounceError = 0x8,
     AnnounceCancel = 0xc,
 
-    // TRACK_STATUS_REQUEST, sent by subscriber
-    TrackStatusRequest = 0xd,
-
-    // TRACK_STATUS, sent by publisher
-    TrackStatus = 0xe,
+    // TRACK_STATUS, sent by subscriber
+    TrackStatus = 0xd,
+    TrackStatusOk = 0xe,
+    TrackStatusError = 0xf,
 
     // Misc
     GoAway = 0x10,
@@ -229,45 +244,8 @@ message_types! {
     FetchError = 0x19,
 
     RequestsBlocked = 0x1a,
-}
 
-/// Track Status Codes
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-04.html#name-track_status
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub enum TrackStatusCode {
-    // 0x00: The track is in progress, and subsequent fields contain the highest group and object ID for that track.
-    InProgress = 0x00,
-    // 0x01: The track does not exist. Subsequent fields MUST be zero, and any other value is a malformed message.
-    DoesNotExist = 0x01,
-    // 0x02: The track has not yet begun. Subsequent fields MUST be zero. Any other value is a malformed message.
-    NotYetBegun = 0x02,
-    // 0x03: The track has finished, so there is no "live edge." Subsequent fields contain the highest Group and object ID known.
-    Finished = 0x03,
-    // 0x04: The sender is a relay that cannot obtain the current track status from upstream. Subsequent fields contain the largest group and object ID known.
-    Relay = 0x04,
-}
-
-impl Decode for TrackStatusCode {
-    fn decode<B: bytes::Buf>(r: &mut B) -> Result<Self, DecodeError> {
-        match u64::decode(r)? {
-            0x00 => Ok(Self::InProgress),
-            0x01 => Ok(Self::DoesNotExist),
-            0x02 => Ok(Self::NotYetBegun),
-            0x03 => Ok(Self::Finished),
-            0x04 => Ok(Self::Relay),
-            _ => Err(DecodeError::InvalidTrackStatusCode),
-        }
-    }
-}
-
-impl Encode for TrackStatusCode {
-    fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        match self {
-            Self::InProgress => (0x00_u64).encode(w),
-            Self::DoesNotExist => (0x01_u64).encode(w),
-            Self::NotYetBegun => (0x02_u64).encode(w),
-            Self::Finished => (0x03_u64).encode(w),
-            Self::Relay => (0x04_u64).encode(w),
-        }
-    }
+    Publish = 0x1d,
+    PublishOk = 0x1e,
+    PublishError = 0x1f,
 }

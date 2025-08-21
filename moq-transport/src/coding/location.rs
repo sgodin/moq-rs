@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -15,16 +15,16 @@ impl Location {
 
 impl Decode for Location {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let group_id = VarInt::decode(r)?;
-        let object_id = VarInt::decode(r)?;
-        Ok(Location::new(group_id.into_inner(), object_id.into_inner()))
+        let group_id = u64::decode(r)?;
+        let object_id = u64::decode(r)?;
+        Ok(Location::new(group_id, object_id))
     }
 }
 
 impl Encode for Location {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.group_id)?.encode(w)?;
-        VarInt::try_from(self.object_id)?.encode(w)?;
+        self.group_id.encode(w)?;
+        self.object_id.encode(w)?;
         Ok(())
     }
 }
@@ -64,6 +64,5 @@ mod tests {
         assert!(loc5 == loc6);
         assert!(loc5 >= loc6);
     }
-
 }
 

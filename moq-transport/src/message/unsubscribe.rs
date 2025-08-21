@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 /// Sent by the subscriber to terminate a Subscribe.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,14 +9,14 @@ pub struct Unsubscribe {
 
 impl Decode for Unsubscribe {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let id = VarInt::decode(r)?.into_inner();
+        let id = u64::decode(r)?;
         Ok(Self { id })
     }
 }
 
 impl Encode for Unsubscribe {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.id)?.encode(w)?;
+        self.id.encode(w)?;
         Ok(())
     }
 }

@@ -68,8 +68,9 @@ impl Subscriber {
 
         // Remove our entry on terminal state.
         match &msg {
-            message::Subscriber::AnnounceCancel(msg) => self.drop_announce(&msg.namespace),
-            message::Subscriber::AnnounceError(msg) => self.drop_announce(&msg.namespace),
+            message::Subscriber::AnnounceCancel(msg) => self.drop_announce(&msg.track_namespace),
+            // TODO SLG - there is no longer a namespace in the error, need to map via request id
+            //message::Subscriber::AnnounceError(msg) => self.drop_announce(&msg.track_namespace),
             _ => {}
         }
 
@@ -85,10 +86,12 @@ impl Subscriber {
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::SubscribeDone(msg) => self.recv_subscribe_done(msg),
             message::Publisher::MaxRequestId(msg) => self.recv_max_request_id(msg),
-            message::Publisher::TrackStatus(msg) => self.recv_track_status(msg),
+            message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
             // TODO: Implement fetch messages
             message::Publisher::FetchOk(_msg) => todo!(),
             message::Publisher::FetchError(_msg) => todo!(),
+            // TODO Implement publish message
+            message::Publisher::Publish(_msg) => todo!(),
         };
 
         if let Err(SessionError::Serve(err)) = res {
@@ -102,12 +105,12 @@ impl Subscriber {
     fn recv_announce(&mut self, msg: &message::Announce) -> Result<(), SessionError> {
         let mut announces = self.announced.lock().unwrap();
 
-        let entry = match announces.entry(msg.namespace.clone()) {
+        let entry = match announces.entry(msg.track_namespace.clone()) {
             hash_map::Entry::Occupied(_) => return Err(SessionError::Duplicate),
             hash_map::Entry::Vacant(entry) => entry,
         };
 
-        let (announced, recv) = Announced::new(self.clone(), msg.namespace.clone());
+        let (announced, recv) = Announced::new(self.clone(), msg.id, msg.track_namespace.clone());
         if let Err(announced) = self.announced_queue.push(announced) {
             announced.close(ServeError::Cancel)?;
             return Ok(());
@@ -119,7 +122,7 @@ impl Subscriber {
     }
 
     fn recv_unannounce(&mut self, msg: &message::Unannounce) -> Result<(), SessionError> {
-        if let Some(announce) = self.announced.lock().unwrap().remove(&msg.namespace) {
+        if let Some(announce) = self.announced.lock().unwrap().remove(&msg.track_namespace) {
             announce.recv_unannounce()?;
         }
 
@@ -136,7 +139,7 @@ impl Subscriber {
 
     fn recv_subscribe_error(&mut self, msg: &message::SubscribeError) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
-            subscribe.error(ServeError::Closed(msg.code))?;
+            subscribe.error(ServeError::Closed(msg.error_code))?;
         }
 
         Ok(())
@@ -161,7 +164,7 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_track_status(&mut self, _msg: &message::TrackStatus) -> Result<(), SessionError> {
+    fn recv_track_status_ok(&mut self, _msg: &message::TrackStatusOk) -> Result<(), SessionError> {
         // TODO: Expose this somehow?
         // TODO: Also add a way to sent a Track Status Request in the first place
 

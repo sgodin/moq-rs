@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::coding::TrackNamespace;
+use crate::coding::{TrackNamespace, ReasonPhrase};
 use crate::watch::State;
 use crate::{message, serve::ServeError};
 
@@ -22,8 +22,8 @@ pub struct Announced {
 }
 
 impl Announced {
-    pub(super) fn new(session: Subscriber, namespace: TrackNamespace) -> (Announced, AnnouncedRecv) {
-        let info = AnnounceInfo { namespace };
+    pub(super) fn new(session: Subscriber, request_id: u64, namespace: TrackNamespace) -> (Announced, AnnouncedRecv) {
+        let info = AnnounceInfo { request_id, namespace };
 
         let (send, recv) = State::default().split();
         let send = Self {
@@ -45,7 +45,7 @@ impl Announced {
         }
 
         self.session.send_message(message::AnnounceOk {
-            namespace: self.namespace.clone(),
+            id: self.info.request_id,
         });
 
         self.ok = true;
@@ -86,15 +86,15 @@ impl Drop for Announced {
         // TODO: Not sure if the error code is correct.
         if self.ok {
             self.session.send_message(message::AnnounceCancel {
-                namespace: self.namespace.clone(),
+                track_namespace: self.namespace.clone(),
                 error_code: 0_u64,
-                reason_phrase: "".into(),
+                reason_phrase: ReasonPhrase("".to_string()),
             });
         } else {
             self.session.send_message(message::AnnounceError {
-                namespace: self.namespace.clone(),
+                id: 0,  // TODO SLG - need to send Annouce request id here
                 error_code: err.code(),
-                reason_phrase: err.to_string(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         }
     }

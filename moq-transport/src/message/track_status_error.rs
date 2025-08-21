@@ -6,7 +6,7 @@ use crate::coding::{Decode, DecodeError, Encode, EncodeError, ReasonPhrase};
 
 /// Sent by the subscriber to reject an Announce.
 #[derive(Clone, Debug)]
-pub struct SubscribeError {
+pub struct TrackStatusError {
     pub id: u64,
 
     // An error code.
@@ -16,7 +16,7 @@ pub struct SubscribeError {
     pub reason_phrase: ReasonPhrase,
 }
 
-impl Decode for SubscribeError {
+impl Decode for TrackStatusError {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
         let error_code = u64::decode(r)?;
@@ -30,7 +30,7 @@ impl Decode for SubscribeError {
     }
 }
 
-impl Encode for SubscribeError {
+impl Encode for TrackStatusError {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
         self.error_code.encode(w)?;

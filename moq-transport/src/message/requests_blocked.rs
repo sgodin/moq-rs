@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 /// Sent by the publisher to update the max allowed subscription ID for the session.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,7 +9,7 @@ pub struct RequestsBlocked {
 
 impl Decode for RequestsBlocked {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let max_request_id = VarInt::decode(r)?.into_inner();
+        let max_request_id = u64::decode(r)?;
 
         Ok(Self { max_request_id })
     }
@@ -17,7 +17,7 @@ impl Decode for RequestsBlocked {
 
 impl Encode for RequestsBlocked {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::try_from(self.max_request_id)?.encode(w)?;
+        self.max_request_id.encode(w)?;
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 use super::{Version};
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt, KeyValuePairs};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
 
 /// Sent by the server in response to a client setup.
 /// This SERVER_SETUP message is used by moq-transport draft versions 11 and later.
@@ -17,9 +17,9 @@ pub struct Server {
 impl Decode for Server {
     /// Decode the server setup.
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let typ = VarInt::decode(r)?;
-        if typ.into_inner() != 0x21 {   // SERVER_SETUP message ID for draft versions 11 and later
-            return Err(DecodeError::InvalidMessage(typ.into_inner()));
+        let typ = u64::decode(r)?;
+        if typ != 0x21 {   // SERVER_SETUP message ID for draft versions 11 and later
+            return Err(DecodeError::InvalidMessage(typ));
         }
 
         let _len = u16::decode(r)?;
@@ -37,7 +37,7 @@ impl Decode for Server {
 
 impl Encode for Server {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        VarInt::from_u32(0x21).encode(w)?; // SERVER_SETUP message ID for draft versions 11 and later
+        (0x21_u64).encode(w)?; // SERVER_SETUP message ID for draft versions 11 and later
 
         // Find out the length of the message
         // by encoding it into a buffer and then encoding the length.
@@ -57,6 +57,7 @@ impl Encode for Server {
 
         // At least don't encode the message twice.
         // Instead, write the buffer directly to the writer.
+        Self::encode_remaining(w, buf.len())?;
         w.put_slice(&buf);
 
         Ok(())

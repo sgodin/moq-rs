@@ -1,45 +1,44 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location};
+use crate::message::GroupOrder;
 
 /// A publisher sends a FETCH_OK control message in response to successful fetches.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FetchOk {
-    /// The subscription ID
+    /// The Fetch request ID of the Fetch this message is replying to.
     pub id: u64,
 
     /// Order groups will be delivered in
-    pub group_order: u8,
+    pub group_order: GroupOrder,
 
     /// True if all objects have been published on this track
-    pub end_of_track: u8,
+    pub end_of_track: bool,
 
-    /// The largest Group ID available for this track (last if end_of_track)
-    pub largest_group_id: u64,
-    /// The largest Object ID available within the largest Group ID for this track (last if end_of_track)
-    pub largest_object_id: u64,
+    /// The largest object covered by the fetch response
+    pub end_location: Location,
 
     /// Optional parameters
-    pub params: Params,
+    pub params: KeyValuePairs,
 }
 
 impl Decode for FetchOk {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
 
-        let group_order = u8::decode(r)?;
-
-        let end_of_track = u8::decode(r)?;
-
-        let largest_group_id = u64::decode(r)?;
-        let largest_object_id = u64::decode(r)?;
-
-        let params = Params::decode(r)?;
+        let group_order = GroupOrder::decode(r)?;
+        // GroupOrder enum has Publisher in it, but it's not allowed to be used in this
+        // FetchOk message, so validate it now so we can return a protocol error.
+        if group_order == GroupOrder::Publisher {
+            return Err(DecodeError::InvalidGroupOrder);
+        }
+        let end_of_track = bool::decode(r)?;
+        let end_location = Location::decode(r)?;
+        let params = KeyValuePairs::decode(r)?;
 
         Ok(Self {
             id,
             group_order,
             end_of_track,
-            largest_group_id,
-            largest_object_id,
+            end_location,
             params,
         })
     }
@@ -49,15 +48,57 @@ impl Encode for FetchOk {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
 
+        // GroupOrder enum has Publisher in it, but it's not allowed to be used in this
+        // FetchOk message.
+        if self.group_order == GroupOrder::Publisher {
+            return Err(EncodeError::InvalidValue);
+        }
         self.group_order.encode(w)?;
-
         self.end_of_track.encode(w)?;
-
-        self.largest_group_id.encode(w)?;
-        self.largest_object_id.encode(w)?;
-
+        self.end_location.encode(w)?;
         self.params.encode(w)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        // One parameter for testing
+        let mut kvps = KeyValuePairs::new();
+        kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
+
+        let msg = FetchOk {
+            id: 12345,
+            group_order: GroupOrder::Descending,
+            end_of_track: true,
+            end_location: Location::new(2,3),
+            params: kvps.clone(),
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = FetchOk::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn encode_bad_group_order() {
+        let mut buf = BytesMut::new();
+
+        let msg = FetchOk {
+            id: 12345,
+            group_order: GroupOrder::Publisher,
+            end_of_track: true,
+            end_location: Location::new(2,3),
+            params: Default::default(),
+        };
+        let encoded = msg.encode(&mut buf);
+        assert!(matches!(encoded.unwrap_err(), EncodeError::InvalidValue));
     }
 }

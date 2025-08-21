@@ -8,6 +8,7 @@ use super::{Publisher, Subscribed, TrackStatusRequested};
 
 #[derive(Debug, Clone)]
 pub struct AnnounceInfo {
+    pub request_id: u64,
     pub namespace: TrackNamespace,
 }
 
@@ -47,12 +48,15 @@ pub struct Announce {
 
 impl Announce {
     pub(super) fn new(mut publisher: Publisher, namespace: TrackNamespace) -> (Announce, AnnounceRecv) {
+        let request_id = 123;  // TODO SLG
         let info = AnnounceInfo {
+            request_id,
             namespace: namespace.clone(),
         };
 
         publisher.send_message(message::Announce {
-            namespace,
+            id: request_id,
+            track_namespace: namespace.clone(),
             params: Default::default(),
         });
 
@@ -151,7 +155,7 @@ impl Drop for Announce {
         }
 
         self.publisher.send_message(message::Unannounce {
-            namespace: self.namespace.clone(),
+            track_namespace: self.namespace.clone(),
         });
     }
 }
@@ -169,6 +173,7 @@ pub(super) struct AnnounceRecv {
 }
 
 impl AnnounceRecv {
+    /*   TODO SLG - need to fix up handling of AnnounceOk - commenting out for now to avoid unused warning
     pub fn recv_ok(&mut self) -> Result<(), ServeError> {
         if let Some(mut state) = self.state.lock_mut() {
             if state.ok {
@@ -179,7 +184,7 @@ impl AnnounceRecv {
         }
 
         Ok(())
-    }
+    }*/
 
     pub fn recv_error(self, err: ServeError) -> Result<(), ServeError> {
         let state = self.state.lock();

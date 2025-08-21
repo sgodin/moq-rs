@@ -69,7 +69,7 @@ impl Session {
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
-        let versions: setup::Versions = [setup::Version::DRAFT_07].into();
+        let versions: setup::Versions = [setup::Version::DRAFT_13].into();
 
         let client = setup::Client {
             versions: versions.clone(),
@@ -96,15 +96,15 @@ impl Session {
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
 
-        if !client.versions.contains(&setup::Version::DRAFT_07) {
+        if !client.versions.contains(&setup::Version::DRAFT_13) {
             return Err(SessionError::Version(
                 client.versions,
-                [setup::Version::DRAFT_07].into(),
+                [setup::Version::DRAFT_13].into(),
             ));
         }
 
         let server = setup::Server {
-            version: setup::Version::DRAFT_07,
+            version: setup::Version::DRAFT_13,
             params: Default::default(),
         };
 

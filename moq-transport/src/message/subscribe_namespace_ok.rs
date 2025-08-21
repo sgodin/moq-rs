@@ -1,22 +1,39 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 /// Subscribe Namespace Ok
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-06.html#name-subscribe_namespace_ok
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscribeNamespaceOk {
-    // Echo back the namespace that was announced.
-    pub namespace_prefix: TrackNamespace,
+    /// The SubscribeNamespace request ID this message is replying to.
+    pub id: u64,
 }
 
 impl Decode for SubscribeNamespaceOk {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let namespace_prefix = TrackNamespace::decode(r)?;
-        Ok(Self { namespace_prefix })
+        let id = u64::decode(r)?;
+        Ok(Self { id })
     }
 }
 
 impl Encode for SubscribeNamespaceOk {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        self.namespace_prefix.encode(w)
+        self.id.encode(w)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        let msg = SubscribeNamespaceOk {
+            id: 12345,
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = SubscribeNamespaceOk::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
     }
 }

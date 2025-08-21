@@ -160,8 +160,8 @@ impl Drop for Subscribed {
         } else {
             self.publisher.send_message(message::SubscribeError {
                 id: self.msg.id,
-                code: err.code(),
-                reason: err.to_string(),
+                error_code: err.code(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         };
     }
