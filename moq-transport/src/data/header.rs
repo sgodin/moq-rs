@@ -48,12 +48,6 @@ macro_rules! header_types {
 				}
 			}
 
-			pub fn subscribe_id(&self) -> u64 {
-				match self {
-					$(Self::$name(o) => o.subscribe_id,)*
-				}
-			}
-
 			pub fn track_alias(&self) -> u64 {
 				match self {
 					$(Self::$name(o) => o.track_alias,)*

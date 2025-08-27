@@ -41,6 +41,14 @@ pub struct Session {
 }
 
 impl Session {
+    // Helper for determining the largest supported version
+    fn largest_common<T: Ord + Clone + Eq>(a: &[T], b: &[T]) -> Option<T> {
+        a.iter()
+            .filter(|x| b.contains(x)) // keep only items also in b
+            .cloned()                  // clone because we return T, not &T
+            .max()                     // take the largest
+    }
+
     fn new(
         webtransport: web_transport::Session,
         sender: Writer,
@@ -69,7 +77,7 @@ impl Session {
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
-        let versions: setup::Versions = [setup::Version::DRAFT_13].into();
+        let versions: setup::Versions = [setup::Version::DRAFT_12, setup::Version::DRAFT_13].into();  // Only one difference in wire messaging between 12 and 13, just say we support both for now
 
         let client = setup::Client {
             versions: versions.clone(),
@@ -96,22 +104,27 @@ impl Session {
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
 
-        if !client.versions.contains(&setup::Version::DRAFT_13) {
+        let server_versions = setup::Versions(vec![
+            setup::Version::DRAFT_12,
+            setup::Version::DRAFT_13,
+        ]);
+
+        if let Some(largest_common_version) = Self::largest_common(&server_versions, &client.versions) {
+            let server = setup::Server {
+                version: largest_common_version,
+                params: Default::default(),
+            };
+
+            log::debug!("sending SERVER_SETUP: {:?}", server);
+            sender.encode(&server).await?;
+
+            Ok(Session::new(session, sender, recver))
+        } else {
             return Err(SessionError::Version(
                 client.versions,
                 [setup::Version::DRAFT_13].into(),
             ));
         }
-
-        let server = setup::Server {
-            version: setup::Version::DRAFT_13,
-            params: Default::default(),
-        };
-
-        log::debug!("sending SERVER_SETUP: {:?}", server);
-        sender.encode(&server).await?;
-
-        Ok(Session::new(session, sender, recver))
     }
 
     pub async fn run(self) -> Result<(), SessionError> {

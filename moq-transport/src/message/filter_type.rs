@@ -11,7 +11,7 @@ pub enum FilterType {
 
 impl Encode for FilterType {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let val = *self as u8;
+        let val = *self as u64;
         val.encode(w)?;
         Ok(())
     }
@@ -19,11 +19,11 @@ impl Encode for FilterType {
 
 impl Decode for FilterType {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        match u8::decode(r)? {
-            0x01 => Ok(Self::NextGroupStart),
-            0x02 => Ok(Self::LargestObject),
-            0x03 => Ok(Self::AbsoluteStart),
-            0x04 => Ok(Self::AbsoluteRange),
+        match u64::decode(r)? {
+            0x1_u64 => Ok(Self::NextGroupStart),
+            0x2_u64 => Ok(Self::LargestObject),
+            0x3_u64 => Ok(Self::AbsoluteStart),
+            0x4_u64 => Ok(Self::AbsoluteRange),
             _ => Err(DecodeError::InvalidFilterType),
         }
     }
@@ -63,7 +63,6 @@ mod tests {
         let decoded = FilterType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
     }
-
 
     #[test]
     fn decode_bad_value() {

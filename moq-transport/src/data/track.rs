@@ -1,3 +1,5 @@
+// TODO SLG - I don't see these messages defined in draft_7 or draft_13 - I see STREAM_HEADER_TRACK in draft_04 - going to assume they are legacy and should be removed
+
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 use crate::data::ObjectStatus;
 
@@ -53,7 +55,7 @@ impl Decode for TrackObject {
         let status = if size == 0 {
             ObjectStatus::decode(r)?
         } else {
-            ObjectStatus::Object
+            ObjectStatus::NormalObject
         };
 
         Ok(Self {

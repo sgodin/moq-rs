@@ -73,6 +73,9 @@ pub enum DecodeError {
 
     #[error("field '{0}' too large")]
     FieldBoundsExceeded(String),
+
+    #[error("invalid datagram type")]
+    InvalidDatagramType,
 }
 
 impl From<io::Error> for DecodeError {

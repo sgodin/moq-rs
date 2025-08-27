@@ -174,7 +174,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
-            subgroup_id: header.subgroup_id,
+            subgroup_id: header.subgroup_id.unwrap(),  // TODO SLG - supgroup_id may not be present
             priority: header.publisher_priority,
         })?;
 
@@ -192,12 +192,12 @@ impl SubscribeRecv {
             _ => return Err(ServeError::Mode),
         };
 
+        // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
             object_id: datagram.object_id,
             priority: datagram.publisher_priority,
-            status: datagram.object_status,
-            payload: datagram.payload,
+            payload: datagram.payload.unwrap(),  // TODO SLG - datagram.payload is an Option
         })?;
 
         Ok(())

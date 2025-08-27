@@ -311,7 +311,7 @@ impl SubgroupWriter {
         let (writer, reader) = SubgroupObject {
             group: self.info.clone(),
             object_id: self.next,
-            status: ObjectStatus::Object,
+            status: ObjectStatus::NormalObject,
             size,
         }
         .produce();

@@ -182,7 +182,8 @@ impl Subscriber {
         let mut reader = Reader::new(stream);
         let header: data::Header = reader.decode().await?;
 
-        let id = header.subscribe_id();
+        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
+        let id = header.track_alias();
 
         let res = self.recv_stream_inner(reader, header).await;
         if let Err(SessionError::Serve(err)) = &res {
@@ -201,7 +202,8 @@ impl Subscriber {
         reader: Reader,
         header: data::Header,
     ) -> Result<(), SessionError> {
-        let id = header.subscribe_id();
+        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
+        let id = header.track_alias();
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
         enum Writer {
@@ -273,8 +275,8 @@ impl Subscriber {
             let object: data::SubgroupObject = reader.decode().await?;
 
             log::trace!("received group object: {:?}", object);
-            let mut remain = object.size;
-            let mut object = group.create(object.size)?;
+            let mut remain = object.payload_length;
+            let mut object = group.create(object.payload_length)?;
 
             while remain > 0 {
                 let data = reader
@@ -298,7 +300,7 @@ impl Subscriber {
             .subscribes
             .lock()
             .unwrap()
-            .get_mut(&datagram.subscribe_id)
+            .get_mut(&datagram.track_alias)  // TODO SLG - look up subscription with track_alias, not subscription id - fix me!
         {
             subscribe.datagram(datagram)?;
         }

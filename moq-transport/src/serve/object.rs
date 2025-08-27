@@ -73,7 +73,7 @@ impl ObjectsWriter {
             group_id: object.group_id,
             object_id: object.object_id,
             priority: object.priority,
-            status: ObjectStatus::Object,
+            status: ObjectStatus::NormalObject,
         };
 
         let (writer, reader) = object.produce();

@@ -230,11 +230,10 @@ impl Subscribed {
                 res = subgroups.next(), if done.is_none() => match res {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
-                            subscribe_id: self.msg.id,
-                            //track_alias: self.msg.track_alias,
-                            track_alias: 1, // TODO SLG - we need to get this from somewhere new
+                            header_type: 0x14,  // SubGroupId = Yes, Extensions = No, ContainsEnd = No
+                            track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
                             group_id: subgroup.group_id,
-                            subgroup_id: subgroup.subgroup_id,
+                            subgroup_id: Some(subgroup.subgroup_id),
                             publisher_priority: subgroup.priority,
                         };
 
@@ -279,8 +278,9 @@ impl Subscribed {
         while let Some(mut object) = subgroup.next().await? {
             let header = data::SubgroupObject {
                 object_id: object.object_id,
-                size: object.size,
-                status: object.status,
+                extension_headers: None, // TODO SLG
+                payload_length: object.size,
+                status: Some(object.status),
             };
 
             writer.encode(&header).await?;
@@ -309,18 +309,17 @@ impl Subscribed {
     ) -> Result<(), SessionError> {
         while let Some(datagram) = datagrams.read().await? {
             let datagram = data::Datagram {
-                subscribe_id: self.msg.id,
-                //track_alias: self.msg.track_alias,
-                track_alias: 1, // TODO SLG - we need to get this from somewhere new
+                datagram_type: data::DatagramType::NoEndOfGroupNoExtensions,  // TODO SLG
+                track_alias: self.msg.id, //  TODO SLG - use subscription id for now
                 group_id: datagram.group_id,
                 object_id: datagram.object_id,
                 publisher_priority: datagram.priority,
-                object_status: datagram.status,
-                payload_len: datagram.payload.len() as u64,
-                payload: datagram.payload,
+                extension_headers: None,
+                status: None,
+                payload: Some(datagram.payload),
             };
 
-            let mut buffer = bytes::BytesMut::with_capacity(datagram.payload.len() + 100);
+            let mut buffer = bytes::BytesMut::with_capacity(datagram.payload.as_ref().unwrap().len() + 100);
             datagram.encode(&mut buffer)?;
 
             self.publisher.send_datagram(buffer.into()).await?;

@@ -19,9 +19,9 @@ impl Encode for FetchType {
 impl Decode for FetchType {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         match u8::decode(r)? {
-            0x01 => Ok(Self::Standalone),
-            0x02 => Ok(Self::RelativeJoining),
-            0x03 => Ok(Self::AbsoluteJoining),
+            0x1 => Ok(Self::Standalone),
+            0x2 => Ok(Self::RelativeJoining),
+            0x3 => Ok(Self::AbsoluteJoining),
             _ => Err(DecodeError::InvalidFetchType),
         }
     }

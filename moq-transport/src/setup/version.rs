@@ -68,7 +68,7 @@ impl fmt::Display for Version {
 
 /// A list of versions in arbitrary order.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Versions(Vec<Version>);
+pub struct Versions(pub Vec<Version>);
 
 impl Decode for Versions {
     /// Decode the version list.
