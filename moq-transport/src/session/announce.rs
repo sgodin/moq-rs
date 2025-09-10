@@ -47,14 +47,13 @@ pub struct Announce {
 }
 
 impl Announce {
-    pub(super) fn new(mut publisher: Publisher, namespace: TrackNamespace) -> (Announce, AnnounceRecv) {
-        let request_id = 123;  // TODO SLG
+    pub(super) fn new(mut publisher: Publisher, request_id: u64, namespace: TrackNamespace) -> (Announce, AnnounceRecv) {
         let info = AnnounceInfo {
             request_id,
             namespace: namespace.clone(),
         };
 
-        publisher.send_message(message::Announce {
+        publisher.send_message(message::PublishNamespace {
             id: request_id,
             track_namespace: namespace.clone(),
             params: Default::default(),
@@ -67,7 +66,7 @@ impl Announce {
             info,
             state: send,
         };
-        let recv = AnnounceRecv { state: recv };
+        let recv = AnnounceRecv { state: recv, request_id };
 
         (send, recv)
     }
@@ -154,7 +153,7 @@ impl Drop for Announce {
             return;
         }
 
-        self.publisher.send_message(message::Unannounce {
+        self.publisher.send_message(message::PublishNamespaceDone {
             track_namespace: self.namespace.clone(),
         });
     }
@@ -170,10 +169,10 @@ impl ops::Deref for Announce {
 
 pub(super) struct AnnounceRecv {
     state: State<AnnounceState>,
+    pub request_id: u64,  // TODO SLG - Announcements need to be looked up by both request_id and namespace, consider 2 hashmaps in publisher instead of this
 }
 
 impl AnnounceRecv {
-    /*   TODO SLG - need to fix up handling of AnnounceOk - commenting out for now to avoid unused warning
     pub fn recv_ok(&mut self) -> Result<(), ServeError> {
         if let Some(mut state) = self.state.lock_mut() {
             if state.ok {
@@ -184,7 +183,7 @@ impl AnnounceRecv {
         }
 
         Ok(())
-    }*/
+    }
 
     pub fn recv_error(self, err: ServeError) -> Result<(), ServeError> {
         let state = self.state.lock();

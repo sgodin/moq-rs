@@ -195,7 +195,7 @@ impl SubscribeRecv {
         // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
-            object_id: datagram.object_id,
+            object_id: datagram.object_id.unwrap(),  // TODO SLG - make safe
             priority: datagram.publisher_priority,
             payload: datagram.payload.unwrap(),  // TODO SLG - datagram.payload is an Option
         })?;

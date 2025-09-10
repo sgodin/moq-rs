@@ -22,19 +22,27 @@ pub struct Subscriber {
     announced_queue: Queue<Announced>,
 
     subscribes: Arc<Mutex<HashMap<u64, SubscribeRecv>>>,
-    subscribe_next: Arc<atomic::AtomicU64>,
 
+    /// The queue we will write any outbound control messages we want to sent, the session run_send task
+    /// will process the queue and send the message on the control stream.
     outgoing: Queue<Message>,
+
+    /// When we need a new Request Id for sending a request, we can get it from here.  Note:  The instance
+    /// of AtomicU64 is shared with the Subscriber, so the session uses unique request ids for all requests
+    /// generated.  Note:  If we initiated the QUIC connection then request id's start at 0 and increment by 2
+    /// for each request (even numbers).  If we accepted an inbound QUIC connection then request id's start at 1 and
+    /// increment by 2 for each request (odd numbers).
+    next_requestid: Arc<atomic::AtomicU64>,
 }
 
 impl Subscriber {
-    pub(super) fn new(outgoing: Queue<Message>) -> Self {
+    pub(super) fn new(outgoing: Queue<Message>, next_requestid: Arc<atomic::AtomicU64>) -> Self {
         Self {
             announced: Default::default(),
             announced_queue: Default::default(),
             subscribes: Default::default(),
-            subscribe_next: Default::default(),
             outgoing,
+            next_requestid,
         }
     }
 
@@ -55,10 +63,11 @@ impl Subscriber {
     }
 
     pub async fn subscribe(&mut self, track: serve::TrackWriter) -> Result<(), ServeError> {
-        let id = self.subscribe_next.fetch_add(1, atomic::Ordering::Relaxed);
+        // Get the current next request id to use and increment the value for by 2 for the next request
+        let request_id = self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed);
 
-        let (send, recv) = Subscribe::new(self.clone(), id, track);
-        self.subscribes.lock().unwrap().insert(id, recv);
+        let (send, recv) = Subscribe::new(self.clone(), request_id, track);
+        self.subscribes.lock().unwrap().insert(request_id, recv);
 
         send.closed().await
     }
@@ -68,7 +77,7 @@ impl Subscriber {
 
         // Remove our entry on terminal state.
         match &msg {
-            message::Subscriber::AnnounceCancel(msg) => self.drop_announce(&msg.track_namespace),
+            message::Subscriber::PublishNamespaceCancel(msg) => self.drop_publish_namespace(&msg.track_namespace),
             // TODO SLG - there is no longer a namespace in the error, need to map via request id
             //message::Subscriber::AnnounceError(msg) => self.drop_announce(&msg.track_namespace),
             _ => {}
@@ -80,18 +89,18 @@ impl Subscriber {
 
     pub(super) fn recv_message(&mut self, msg: message::Publisher) -> Result<(), SessionError> {
         let res = match &msg {
-            message::Publisher::Announce(msg) => self.recv_announce(msg),
-            message::Publisher::Unannounce(msg) => self.recv_unannounce(msg),
+            message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
+            message::Publisher::PublishNamespaceDone(msg) => self.recv_publish_namespace_done(msg),
+            message::Publisher::Publish(_msg) => todo!(),  // TODO
+            message::Publisher::PublishDone(msg) => self.recv_publish_done(msg),
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
-            message::Publisher::SubscribeDone(msg) => self.recv_subscribe_done(msg),
-            message::Publisher::MaxRequestId(msg) => self.recv_max_request_id(msg),
             message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
-            // TODO: Implement fetch messages
-            message::Publisher::FetchOk(_msg) => todo!(),
-            message::Publisher::FetchError(_msg) => todo!(),
-            // TODO Implement publish message
-            message::Publisher::Publish(_msg) => todo!(),
+            message::Publisher::TrackStatusError(_msg) => todo!(), // TODO
+            message::Publisher::FetchOk(_msg) => todo!(), // TODO
+            message::Publisher::FetchError(_msg) => todo!(), // TODO
+            message::Publisher::SubscribeNamespaceOk(_msg) => todo!(),
+            message::Publisher::SubscribeNamespaceError(_msg) => todo!(),
         };
 
         if let Err(SessionError::Serve(err)) = res {
@@ -102,7 +111,7 @@ impl Subscriber {
         res
     }
 
-    fn recv_announce(&mut self, msg: &message::Announce) -> Result<(), SessionError> {
+    fn recv_publish_namespace(&mut self, msg: &message::PublishNamespace) -> Result<(), SessionError> {
         let mut announces = self.announced.lock().unwrap();
 
         let entry = match announces.entry(msg.track_namespace.clone()) {
@@ -121,7 +130,7 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_unannounce(&mut self, msg: &message::Unannounce) -> Result<(), SessionError> {
+    fn recv_publish_namespace_done(&mut self, msg: &message::PublishNamespaceDone) -> Result<(), SessionError> {
         if let Some(announce) = self.announced.lock().unwrap().remove(&msg.track_namespace) {
             announce.recv_unannounce()?;
         }
@@ -145,7 +154,7 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_subscribe_done(&mut self, msg: &message::SubscribeDone) -> Result<(), SessionError> {
+    fn recv_publish_done(&mut self, msg: &message::PublishDone) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
             subscribe.error(ServeError::Closed(msg.status_code))?;
         }
@@ -153,25 +162,14 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_max_request_id(
-        &mut self,
-        _msg: &message::MaxRequestId,
-    ) -> Result<(), SessionError> {
-        // TODO: The Maximum Subscribe Id MUST only increase within a session,
-        // and receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller
-        // Subscribe ID value is a 'Protocol Violation'
-        // The session should be accessible here to check the max_subscribe_id
-        Ok(())
-    }
-
     fn recv_track_status_ok(&mut self, _msg: &message::TrackStatusOk) -> Result<(), SessionError> {
         // TODO: Expose this somehow?
-        // TODO: Also add a way to sent a Track Status Request in the first place
+        // TODO: Also add a way to send a Track Status Request in the first place
 
         Ok(())
     }
 
-    fn drop_announce(&mut self, namespace: &TrackNamespace) {
+    fn drop_publish_namespace(&mut self, namespace: &TrackNamespace) {
         self.announced.lock().unwrap().remove(namespace);
     }
 

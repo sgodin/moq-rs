@@ -44,7 +44,7 @@ impl Announced {
             return Err(ServeError::Duplicate);
         }
 
-        self.session.send_message(message::AnnounceOk {
+        self.session.send_message(message::PublishNamespaceOk {
             id: self.info.request_id,
         });
 
@@ -83,16 +83,16 @@ impl Drop for Announced {
     fn drop(&mut self) {
         let err = self.error.clone().unwrap_or(ServeError::Done);
 
-        // TODO: Not sure if the error code is correct.
+        // TODO SLG - ServeError's do not align with draft-13 Announce error codes (section 8.25)
         if self.ok {
-            self.session.send_message(message::AnnounceCancel {
+            self.session.send_message(message::PublishNamespaceCancel {
                 track_namespace: self.namespace.clone(),
-                error_code: 0_u64,
-                reason_phrase: ReasonPhrase("".to_string()),
+                error_code: err.code(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         } else {
-            self.session.send_message(message::AnnounceError {
-                id: 0,  // TODO SLG - need to send Annouce request id here
+            self.session.send_message(message::PublishNamespaceError {
+                id: self.info.request_id,
                 error_code: err.code(),
                 reason_phrase: ReasonPhrase(err.to_string()),
             });

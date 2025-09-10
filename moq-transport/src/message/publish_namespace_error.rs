@@ -4,9 +4,9 @@ use crate::coding::{Decode, DecodeError, Encode, EncodeError, ReasonPhrase};
 //            common RequestError message, so we won't do a lot of work on these
 //            existing messages.  We should add an enum for all the various error codes.
 
-/// Sent by the subscriber to reject an Announce.
+/// Sent by the subscriber to reject an PUBLISH_NAMESPACE.
 #[derive(Clone, Debug)]
-pub struct AnnounceError {
+pub struct PublishNamespaceError {
     pub id: u64,
 
     // An error code.
@@ -16,7 +16,7 @@ pub struct AnnounceError {
     pub reason_phrase: ReasonPhrase,
 }
 
-impl Decode for AnnounceError {
+impl Decode for PublishNamespaceError {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
         let error_code = u64::decode(r)?;
@@ -30,7 +30,7 @@ impl Decode for AnnounceError {
     }
 }
 
-impl Encode for AnnounceError {
+impl Encode for PublishNamespaceError {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
         self.error_code.encode(w)?;

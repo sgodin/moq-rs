@@ -10,18 +10,20 @@ use crate::{data, message, serve};
 
 use super::{Publisher, SessionError, SubscribeInfo, Writer};
 
+// This file defines Publisher handling of inbound Subscriptions
+
 #[derive(Debug)]
 struct SubscribedState {
-    max_group_id: Option<Location>,
+    largest_location: Option<Location>,
     closed: Result<(), ServeError>,
 }
 
 impl SubscribedState {
-    fn update_max_group_id(&mut self, group_id: u64, object_id: u64) -> Result<(), ServeError> {
-        if let Some(current_max_group_id) = self.max_group_id {
-            let update_max_group_id = Location::new(group_id, object_id);
-            if update_max_group_id >= current_max_group_id {
-                self.max_group_id = Some(update_max_group_id);
+    fn update_largest_location(&mut self, group_id: u64, object_id: u64) -> Result<(), ServeError> {
+        if let Some(current_largest_location) = self.largest_location {
+            let update_largest_location = Location::new(group_id, object_id);
+            if update_largest_location > current_largest_location {
+                self.largest_location = Some(update_largest_location);
             }
         }
 
@@ -32,19 +34,30 @@ impl SubscribedState {
 impl Default for SubscribedState {
     fn default() -> Self {
         Self {
-            max_group_id: None,
+            largest_location: None,
             closed: Ok(()),
         }
     }
 }
 
 pub struct Subscribed {
+    /// The sessions Publisher manager, used to send control messages,
+    /// create new QUIC streams, and send datagrams
     publisher: Publisher,
-    state: State<SubscribedState>,
-    msg: message::Subscribe,
-    ok: bool,
 
+    /// The Subscribe request message that created this subscription
+    msg: message::Subscribe,
+
+    /// The tracknamespace and trackname for the subscription.
+    /// TODO SLG - is this needed? we have this information in the stored Subscribe
+    ///            message.  Maybe better generic when Publish is implemented.
     pub info: SubscribeInfo,
+
+    state: State<SubscribedState>,
+
+    /// Tracks if SubscribeOk has been sent yet or not. Used to send
+    /// SubscribeDone vs SubscribeError on drop.
+    ok: bool,
 }
 
 impl Subscribed {
@@ -83,7 +96,7 @@ impl Subscribed {
         self.state
             .lock_mut()
             .ok_or(ServeError::Cancel)?
-            .max_group_id = latest;
+            .largest_location = latest;
 
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
@@ -95,7 +108,7 @@ impl Subscribed {
             params: Default::default(),
         });
 
-        self.ok = true; // So we sent SubscribeDone on drop
+        self.ok = true; // So we send SubscribeDone on drop
 
         match track.mode().await? {
             // TODO cancel track/datagrams on closed
@@ -151,7 +164,7 @@ impl Drop for Subscribed {
         drop(state); // Important to avoid a deadlock
 
         if self.ok {
-            self.publisher.send_message(message::SubscribeDone {
+            self.publisher.send_message(message::PublishDone {
                 id: self.msg.id,
                 status_code: err.code(),
                 stream_count: 0,  // TODO SLG
@@ -200,7 +213,7 @@ impl Subscribed {
                 self.state
                     .lock_mut()
                     .ok_or(ServeError::Done)?
-                    .update_max_group_id(object.group_id, object.object_id)?;
+                    .update_largest_location(object.group_id, object.object_id)?;
 
                 writer.encode(&header).await?;
 
@@ -277,7 +290,7 @@ impl Subscribed {
 
         while let Some(mut object) = subgroup.next().await? {
             let header = data::SubgroupObject {
-                object_id: object.object_id,
+                object_id_delta: object.object_id,
                 extension_headers: None, // TODO SLG
                 payload_length: object.size,
                 status: Some(object.status),
@@ -288,7 +301,7 @@ impl Subscribed {
             state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_max_group_id(subgroup.group_id, object.object_id)?;
+                .update_largest_location(subgroup.group_id, object.object_id)?;
 
             log::trace!("sent group object: {:?}", header);
 
@@ -309,10 +322,10 @@ impl Subscribed {
     ) -> Result<(), SessionError> {
         while let Some(datagram) = datagrams.read().await? {
             let datagram = data::Datagram {
-                datagram_type: data::DatagramType::NoEndOfGroupNoExtensions,  // TODO SLG
+                datagram_type: data::DatagramType::ObjectIdPayload,  // TODO SLG
                 track_alias: self.msg.id, //  TODO SLG - use subscription id for now
                 group_id: datagram.group_id,
-                object_id: datagram.object_id,
+                object_id: Some(datagram.object_id),
                 publisher_priority: datagram.priority,
                 extension_headers: None,
                 status: None,
@@ -328,7 +341,7 @@ impl Subscribed {
             self.state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_max_group_id(datagram.group_id, datagram.object_id)?;
+                .update_largest_location(datagram.group_id, datagram.object_id.unwrap())?;  // TODO SLG - fix up safety of unwrap()
         }
 
         Ok(())

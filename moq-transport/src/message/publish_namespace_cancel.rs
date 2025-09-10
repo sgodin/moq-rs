@@ -1,8 +1,8 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace, ReasonPhrase};
 
-/// Sent by the subscriber to reject an Announce after ANNOUNCE_OK
+/// Sent by the subscriber to terminate an Announce after PUBLISH_NAMESPACE_OK
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AnnounceCancel {
+pub struct PublishNamespaceCancel {
     // Echo back the namespace that was reset
     pub track_namespace: TrackNamespace,
     // An error code.
@@ -11,7 +11,7 @@ pub struct AnnounceCancel {
     pub reason_phrase: ReasonPhrase,
 }
 
-impl Decode for AnnounceCancel {
+impl Decode for PublishNamespaceCancel {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let track_namespace = TrackNamespace::decode(r)?;
         let error_code = u64::decode(r)?;
@@ -25,7 +25,7 @@ impl Decode for AnnounceCancel {
     }
 }
 
-impl Encode for AnnounceCancel {
+impl Encode for PublishNamespaceCancel {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.track_namespace.encode(w)?;
         self.error_code.encode(w)?;
@@ -44,13 +44,13 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = AnnounceCancel {
+        let msg = PublishNamespaceCancel {
             track_namespace: TrackNamespace::from_utf8_path("testpath/video"),
             error_code: 0x2,
             reason_phrase: ReasonPhrase("Timeout".to_string()),
         };
         msg.encode(&mut buf).unwrap();
-        let decoded = AnnounceCancel::decode(&mut buf).unwrap();
+        let decoded = PublishNamespaceCancel::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
     }
 }

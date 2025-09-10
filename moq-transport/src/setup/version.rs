@@ -20,6 +20,9 @@ impl Version {
 
     /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-13.html
     pub const DRAFT_13: Version = Version(0xff00000d);
+
+    /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-14.html
+    pub const DRAFT_14: Version = Version(0xff00000e);
 }
 
 impl From<u32> for Version {

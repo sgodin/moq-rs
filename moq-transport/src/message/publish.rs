@@ -78,7 +78,7 @@ impl Encode for Publish {
             if let Some(largest) = &self.largest_location {
                 largest.encode(w)?;
             } else {
-                return Err(EncodeError::MissingField);
+                return Err(EncodeError::MissingField("LargestLocation".to_string()));
             }
         }
         self.forward.encode(w)?;
@@ -150,7 +150,7 @@ mod tests {
             params: Default::default(),
         };
         let encoded = msg.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField));
+        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 
     #[test]

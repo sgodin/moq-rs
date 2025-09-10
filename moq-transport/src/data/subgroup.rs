@@ -49,7 +49,7 @@ impl Encode for SubgroupHeader {
             if let Some(subgroup_id) = self.subgroup_id {
                 subgroup_id.encode(w)?;
             } else {
-                return Err(EncodeError::MissingField);
+                return Err(EncodeError::MissingField("SubgroupId".to_string()));
             }
         }
         self.publisher_priority.encode(w)?;
@@ -60,7 +60,7 @@ impl Encode for SubgroupHeader {
 
 #[derive(Clone, Debug)]
 pub struct SubgroupObject {
-    pub object_id: u64,
+    pub object_id_delta: u64,
     pub extension_headers: Option<KeyValuePairs>,
     pub payload_length: usize,
     pub status: Option<ObjectStatus>,
@@ -69,7 +69,7 @@ pub struct SubgroupObject {
 
 impl Decode for SubgroupObject {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let object_id = u64::decode(r)?;
+        let object_id_delta = u64::decode(r)?;
         // TODO SLG - assume no extension headers for now, we currently don't know if they will be present or not without analysing the stream header type
         let extension_headers = None;
         let payload_length = usize::decode(r)?;
@@ -82,7 +82,7 @@ impl Decode for SubgroupObject {
         //let payload = r.copy_to_bytes(payload_length);
 
         Ok(Self {
-            object_id,
+            object_id_delta,
             extension_headers,
             payload_length,
             status,
@@ -93,7 +93,7 @@ impl Decode for SubgroupObject {
 
 impl Encode for SubgroupObject {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        self.object_id.encode(w)?;
+        self.object_id_delta.encode(w)?;
         if let Some(extension_headers) = &self.extension_headers {
             extension_headers.encode(w)?;
         }
@@ -101,9 +101,9 @@ impl Encode for SubgroupObject {
         if self.payload_length == 0 {
             if let Some(status) = self.status {
                 status.encode(w)?;
+            } else {
+                return Err(EncodeError::MissingField("Status".to_string()));
             }
-        } else {
-            return Err(EncodeError::MissingField);
         }
         //Self::encode_remaining(w, self.payload.len())?;
         //w.put_slice(&self.payload);

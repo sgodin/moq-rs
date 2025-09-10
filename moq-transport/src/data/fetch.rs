@@ -87,9 +87,9 @@ impl Encode for FetchObject {
         if self.payload_length == 0 {
             if let Some(status) = self.status {
                 status.encode(w)?;
+            } else {
+                return Err(EncodeError::MissingField("Status".to_string()));
             }
-        } else {
-            return Err(EncodeError::MissingField);
         }
         //Self::encode_remaining(w, self.payload.len())?;
         //w.put_slice(&self.payload);

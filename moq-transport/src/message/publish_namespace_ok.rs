@@ -1,20 +1,20 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
-/// Sent by the subscriber to accept an Announce.
+/// Sent by the subscriber to accept a PUBLISH_NAMESPACE.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AnnounceOk {
-    /// The request ID of the ANNOUNCE this message is replying to.
+pub struct PublishNamespaceOk {
+    /// The request ID of the PUBLISH_NAMESPACE this message is replying to.
     pub id: u64,
 }
 
-impl Decode for AnnounceOk {
+impl Decode for PublishNamespaceOk {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
         Ok(Self { id })
     }
 }
 
-impl Encode for AnnounceOk {
+impl Encode for PublishNamespaceOk {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)
     }
@@ -29,11 +29,11 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = AnnounceOk {
+        let msg = PublishNamespaceOk {
             id: 12345,
         };
         msg.encode(&mut buf).unwrap();
-        let decoded = AnnounceOk::decode(&mut buf).unwrap();
+        let decoded = PublishNamespaceOk::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
     }
 }

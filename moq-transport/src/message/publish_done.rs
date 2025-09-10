@@ -4,7 +4,7 @@ use crate::coding::{Decode, DecodeError, Encode, EncodeError, ReasonPhrase};
 
 /// Sent by the publisher to cleanly terminate a Subscription.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubscribeDone {
+pub struct PublishDone {
     // The request ID of the subscription being terminated.
     pub id: u64,
 
@@ -18,7 +18,7 @@ pub struct SubscribeDone {
     pub reason: ReasonPhrase,
 }
 
-impl Decode for SubscribeDone {
+impl Decode for PublishDone {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
         let status_code = u64::decode(r)?;
@@ -34,7 +34,7 @@ impl Decode for SubscribeDone {
     }
 }
 
-impl Encode for SubscribeDone {
+impl Encode for PublishDone {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
         self.status_code.encode(w)?;
@@ -54,14 +54,14 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = SubscribeDone {
+        let msg = PublishDone {
             id: 12345,
             status_code: 0x02,
             stream_count: 2,
             reason: ReasonPhrase("Track Ended".to_string()),
         };
         msg.encode(&mut buf).unwrap();
-        let decoded = SubscribeDone::decode(&mut buf).unwrap();
+        let decoded = PublishDone::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
     }
 }

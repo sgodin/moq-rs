@@ -1,8 +1,9 @@
+use std::fmt;
 use super::{Decode, DecodeError, Encode, EncodeError, TupleField};
 use core::hash::{Hash, Hasher};
 
 /// TrackNamespace
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct TrackNamespace {
     pub fields: Vec<TupleField>,
 }
@@ -71,6 +72,19 @@ impl Encode for TrackNamespace {
             field.encode(w)?;
         }
         Ok(())
+    }
+}
+
+impl fmt::Debug for TrackNamespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Just reuse the Display formatting
+        write!(f, "{self}")
+    }
+}
+
+impl fmt::Display for TrackNamespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{0}", self.to_utf8_path())
     }
 }
 

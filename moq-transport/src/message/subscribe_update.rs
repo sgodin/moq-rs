@@ -5,8 +5,11 @@ use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Loc
 /// Objects will use the provided ID instead of the full track name, to save bytes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscribeUpdate {
-    /// The request ID of the SUBSCRIBE this message is updating.
+    /// The request ID of this request
     pub id: u64,
+
+    /// The request ID of the SUBSCRIBE this message is updating.
+    pub subscription_request_id: u64,
 
     /// The starting location
     pub start_location: Location,
@@ -27,6 +30,8 @@ impl Decode for SubscribeUpdate {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
 
+        let subscription_request_id = u64::decode(r)?;
+
         let start_location = Location::decode(r)?;
         let end_group_id = u64::decode(r)?;
 
@@ -38,6 +43,7 @@ impl Decode for SubscribeUpdate {
 
         Ok(Self {
             id,
+            subscription_request_id,
             start_location,
             end_group_id,
             subscriber_priority,
@@ -50,6 +56,8 @@ impl Decode for SubscribeUpdate {
 impl Encode for SubscribeUpdate {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
+
+        self.subscription_request_id.encode(w)?;
 
         self.start_location.encode(w)?;
         self.end_group_id.encode(w)?;
@@ -79,6 +87,7 @@ mod tests {
 
         let msg = SubscribeUpdate {
             id: 1000,
+            subscription_request_id: 924,
             start_location: Location::new(1, 1),
             end_group_id: 100000,
             subscriber_priority: 127,

@@ -98,7 +98,7 @@ impl Encode for Subscribe {
                 if let Some(start) = &self.start_location {
                     start.encode(w)?;
                 } else {
-                    return Err(EncodeError::MissingField);
+                    return Err(EncodeError::MissingField("StartLocation".to_string()));
                 }
                 // Just ignore end_group_id if it happens to be set
             }
@@ -106,12 +106,12 @@ impl Encode for Subscribe {
                 if let Some(start) = &self.start_location {
                     start.encode(w)?;
                 } else {
-                    return Err(EncodeError::MissingField);
+                    return Err(EncodeError::MissingField("StartLocation".to_string()));
                 }
                 if let Some(end) = self.end_group_id {
                     end.encode(w)?;
                 } else {
-                    return Err(EncodeError::MissingField);
+                    return Err(EncodeError::MissingField("EndGroupId".to_string()));
                 }
             }
             _ => {}
@@ -206,7 +206,7 @@ mod tests {
             params: Default::default(),
         };
         let encoded = msg.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField));
+        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
 
         // FilterType = AbsoluteRange - missing start_location
         let msg = Subscribe {
@@ -222,7 +222,7 @@ mod tests {
             params: Default::default(),
         };
         let encoded = msg.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField));
+        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
 
         // FilterType = AbsoluteRange - missing end_group_id
         let msg = Subscribe {
@@ -238,7 +238,7 @@ mod tests {
             params: Default::default(),
         };
         let encoded = msg.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField));
+        assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 }
 

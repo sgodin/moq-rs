@@ -1,12 +1,12 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace};
 
-/// Sent by the publisher to terminate an Announce.
+/// Sent by the publisher to terminate a PUBLISH_NAMESPACE.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Unannounce {
+pub struct PublishNamespaceDone {
     pub track_namespace: TrackNamespace,
 }
 
-impl Decode for Unannounce {
+impl Decode for PublishNamespaceDone {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let track_namespace = TrackNamespace::decode(r)?;
 
@@ -14,7 +14,7 @@ impl Decode for Unannounce {
     }
 }
 
-impl Encode for Unannounce {
+impl Encode for PublishNamespaceDone {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.track_namespace.encode(w)?;
 
@@ -32,11 +32,11 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = Unannounce {
+        let msg = PublishNamespaceDone {
             track_namespace: TrackNamespace::from_utf8_path("test/path/to/resource"),
         };
         msg.encode(&mut buf).unwrap();
-        let decoded = Unannounce::decode(&mut buf).unwrap();
+        let decoded = PublishNamespaceDone::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
     }
 }
