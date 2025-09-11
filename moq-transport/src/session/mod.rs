@@ -85,10 +85,7 @@ impl Session {
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
-        // TODO SLG - Only small differences in wire messaging, just say we support all recent for now for limited testing
         let versions: setup::Versions = [
-            setup::Version::DRAFT_12,
-            setup::Version::DRAFT_13,
             setup::Version::DRAFT_14,
         ].into();
 
