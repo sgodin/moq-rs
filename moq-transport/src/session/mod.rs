@@ -117,10 +117,7 @@ impl Session {
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
 
-        // TODO SLG - Only small differences in wire messaging, just say we support all recent for now for limited testing
         let server_versions = setup::Versions(vec![
-            setup::Version::DRAFT_12,
-            setup::Version::DRAFT_13,
             setup::Version::DRAFT_14,
         ]);
 
