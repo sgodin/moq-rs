@@ -147,18 +147,6 @@ impl SubscribeRecv {
         Ok(())
     }
 
-    pub fn track(&mut self, header: data::TrackHeader) -> Result<serve::StreamWriter, ServeError> {
-        let writer = self.writer.take().ok_or(ServeError::Done)?;
-
-        let stream = match writer {
-            TrackWriterMode::Track(init) => init.stream(header.publisher_priority)?,
-            _ => return Err(ServeError::Mode),
-        };
-
-        self.writer = Some(stream.clone().into());
-
-        Ok(stream)
-    }
 
     pub fn subgroup(
         &mut self,
@@ -167,6 +155,7 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut subgroups = match writer {
+            // TODO SLG - understand why both of these are needed, clock demo won't run if I comment out TrackWriteMode::Track
             TrackWriterMode::Track(init) => init.groups()?,
             TrackWriterMode::Subgroups(subgroups) => subgroups,
             _ => return Err(ServeError::Mode),
@@ -174,7 +163,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
-            subgroup_id: header.subgroup_id.unwrap(),  // TODO SLG - supgroup_id may not be present
+            subgroup_id: header.subgroup_id.unwrap(),  // TODO SLG - subgroup_id may not be present
             priority: header.publisher_priority,
         })?;
 
@@ -187,7 +176,7 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut datagrams = match writer {
-            TrackWriterMode::Track(init) => init.datagrams()?,
+            TrackWriterMode::Track(init) => init.datagrams()?,  // TODO SLG - is this needed?
             TrackWriterMode::Datagrams(datagrams) => datagrams,
             _ => return Err(ServeError::Mode),
         };

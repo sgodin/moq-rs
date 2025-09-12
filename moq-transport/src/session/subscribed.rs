@@ -50,7 +50,7 @@ pub struct Subscribed {
 
     /// The tracknamespace and trackname for the subscription.
     /// TODO SLG - is this needed? we have this information in the stored Subscribe
-    ///            message.  Maybe better generic when Publish is implemented.
+    ///            message.
     pub info: SubscribeInfo,
 
     state: State<SubscribedState>,
@@ -112,7 +112,7 @@ impl Subscribed {
 
         match track.mode().await? {
             // TODO cancel track/datagrams on closed
-            TrackReaderMode::Stream(stream) => self.serve_track(stream).await,
+            TrackReaderMode::Stream(_stream) => panic!("deprecated"),
             TrackReaderMode::Subgroups(subgroups) => self.serve_subgroups(subgroups).await,
             TrackReaderMode::Datagrams(datagrams) => self.serve_datagrams(datagrams).await,
         }
@@ -181,56 +181,6 @@ impl Drop for Subscribed {
 }
 
 impl Subscribed {
-    async fn serve_track(&mut self, mut track: serve::StreamReader) -> Result<(), SessionError> {
-        let mut stream = self.publisher.open_uni().await?;
-
-        // TODO figure out u32 vs u64 priority
-        stream.set_priority(track.priority as i32);
-
-        let mut writer = Writer::new(stream);
-
-        let header: data::Header = data::TrackHeader {
-            subscribe_id: self.msg.id,
-            //track_alias: self.msg.track_alias,
-            track_alias: 1, // TODO SLG - we need to get this from somewhere new
-            publisher_priority: track.priority,
-        }
-        .into();
-
-        writer.encode(&header).await?;
-
-        log::trace!("sent track header: {:?}", header);
-
-        while let Some(mut group) = track.next().await? {
-            while let Some(mut object) = group.next().await? {
-                let header = data::TrackObject {
-                    group_id: object.group_id,
-                    object_id: object.object_id,
-                    size: object.size,
-                    status: object.status,
-                };
-
-                self.state
-                    .lock_mut()
-                    .ok_or(ServeError::Done)?
-                    .update_largest_location(object.group_id, object.object_id)?;
-
-                writer.encode(&header).await?;
-
-                log::trace!("sent track object: {:?}", header);
-
-                while let Some(chunk) = object.read().await? {
-                    writer.write(&chunk).await?;
-                    log::trace!("sent track payload: {:?}", chunk.len());
-                }
-
-                log::trace!("sent track done");
-            }
-        }
-
-        Ok(())
-    }
-
     async fn serve_subgroups(
         &mut self,
         mut subgroups: serve::SubgroupsReader,
@@ -243,7 +193,7 @@ impl Subscribed {
                 res = subgroups.next(), if done.is_none() => match res {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
-                            header_type: 0x14,  // SubGroupId = Yes, Extensions = No, ContainsEnd = No
+                            header_type: data::StreamHeaderType::SubgroupId,  // SubGroupId = Yes, Extensions = No, ContainsEnd = No
                             track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
                             group_id: subgroup.group_id,
                             subgroup_id: Some(subgroup.subgroup_id),
@@ -256,7 +206,7 @@ impl Subscribed {
 
                         tasks.push(async move {
                             if let Err(err) = Self::serve_subgroup(header, subgroup, publisher, state).await {
-                                log::warn!("failed to serve group: {:?}, error: {}", info, err);
+                                log::warn!("failed to serve subgroup: {:?}, error: {}", info, err);
                             }
                         });
                     },
@@ -272,45 +222,48 @@ impl Subscribed {
 
     async fn serve_subgroup(
         header: data::SubgroupHeader,
-        mut subgroup: serve::SubgroupReader,
+        mut subgroup_reader: serve::SubgroupReader,
         mut publisher: Publisher,
         state: State<SubscribedState>,
     ) -> Result<(), SessionError> {
-        let mut stream = publisher.open_uni().await?;
+        let mut send_stream = publisher.open_uni().await?;
 
         // TODO figure out u32 vs u64 priority
-        stream.set_priority(subgroup.priority as i32);
+        send_stream.set_priority(subgroup_reader.priority as i32);
 
-        let mut writer = Writer::new(stream);
+        let mut writer = Writer::new(send_stream);
 
-        let header: data::Header = header.into();
+        log::trace!("sending subgroup header: {:?}", header);
+
         writer.encode(&header).await?;
 
-        log::trace!("sent group: {:?}", header);
-
-        while let Some(mut object) = subgroup.next().await? {
-            let header = data::SubgroupObject {
-                object_id_delta: object.object_id,
-                extension_headers: None, // TODO SLG
-                payload_length: object.size,
-                status: Some(object.status),
+        while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
+            let subgroup_object = data::SubgroupObject {
+                object_id_delta: subgroup_object_reader.object_id,
+                payload_length: subgroup_object_reader.size,
+                status: if subgroup_object_reader.size == 0 {  // Only set status if payload length is zero
+                    Some(subgroup_object_reader.status)
+                } else {
+                    None
+                },
             };
 
-            writer.encode(&header).await?;
+            writer.encode(&subgroup_object).await?;
 
             state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_largest_location(subgroup.group_id, object.object_id)?;
+                .update_largest_location(subgroup_reader.group_id, subgroup_object_reader.object_id)?;
 
-            log::trace!("sent group object: {:?}", header);
+            log::trace!("sent subgroup object: {:?}", subgroup_object);
 
-            while let Some(chunk) = object.read().await? {
+            while let Some(chunk) = subgroup_object_reader.read().await? {
                 writer.write(&chunk).await?;
-                log::trace!("sent group payload: {:?}", chunk.len());
+                // payload length already logged when subgroup object is logged
+                //log::trace!("sent group payload len: {:?}", chunk.len());
             }
 
-            log::trace!("sent group done");
+            //log::trace!("sent subgroup done");
         }
 
         Ok(())

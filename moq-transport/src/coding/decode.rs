@@ -46,9 +46,8 @@ pub enum DecodeError {
     #[error("invalid object status")]
     InvalidObjectStatus,
 
-    // Not used - TODO SLG - remove?
-    //#[error("field '{0}' missing")]
-    //MissingField(String),
+    #[error("invalid header type")]
+    InvalidHeaderType,
 
     #[error("invalid value")]
     InvalidValue,

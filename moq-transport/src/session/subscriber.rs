@@ -178,12 +178,15 @@ impl Subscriber {
         stream: web_transport::RecvStream,
     ) -> Result<(), SessionError> {
         let mut reader = Reader::new(stream);
-        let header: data::Header = reader.decode().await?;
 
+        // Decode the stream header
+        let stream_header: data::StreamHeader = reader.decode().await?;
+
+        // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
-        let id = header.track_alias();
+        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
 
-        let res = self.recv_stream_inner(reader, header).await;
+        let res = self.recv_stream_inner(reader, stream_header).await;
         if let Err(SessionError::Serve(err)) = &res {
             // The writer is closed, so we should teriminate.
             // TODO it would be nice to do this immediately when the Writer is closed.
@@ -198,14 +201,15 @@ impl Subscriber {
     async fn recv_stream_inner(
         &mut self,
         reader: Reader,
-        header: data::Header,
+        stream_header: data::StreamHeader,
     ) -> Result<(), SessionError> {
+        // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
-        let id = header.track_alias();
+        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
         enum Writer {
-            Track(serve::StreamWriter),
+            //Fetch(serve::FetchWriter),
             Subgroup(serve::SubgroupWriter),
         }
 
@@ -213,77 +217,57 @@ impl Subscriber {
             let mut subscribes = self.subscribes.lock().unwrap();
             let subscribe = subscribes.get_mut(&id).ok_or(ServeError::NotFound)?;
 
-            match header {
-                data::Header::Track(track) => Writer::Track(subscribe.track(track)?),
-                data::Header::Subgroup(subgroup) => Writer::Subgroup(subscribe.subgroup(subgroup)?),
+            if stream_header.header_type.is_subgroup() {
+                Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
+            } else {
+                panic!("Fetch not implemented yet!")
             }
         };
 
         match writer {
-            Writer::Track(track) => Self::recv_track(track, reader).await?,
-            Writer::Subgroup(group) => Self::recv_subgroup(group, reader).await?,
+            //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
+            Writer::Subgroup(subgroup) => Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?,
         };
-
-        Ok(())
-    }
-
-    async fn recv_track(
-        mut track: serve::StreamWriter,
-        mut reader: Reader,
-    ) -> Result<(), SessionError> {
-        log::trace!("received track: {:?}", track.info);
-
-        let mut prev: Option<serve::StreamGroupWriter> = None;
-
-        while !reader.done().await? {
-            let chunk: data::TrackObject = reader.decode().await?;
-
-            let mut group = match prev {
-                Some(group) if group.group_id == chunk.group_id => group,
-                _ => track.create(chunk.group_id)?,
-            };
-
-            let mut object = group.create(chunk.size)?;
-
-            let mut remain = chunk.size;
-            while remain > 0 {
-                let chunk = reader
-                    .read_chunk(remain)
-                    .await?
-                    .ok_or(SessionError::WrongSize)?;
-
-                log::trace!("received track payload: {:?}", chunk.len());
-                remain -= chunk.len();
-                object.write(chunk)?;
-            }
-
-            prev = Some(group);
-        }
 
         Ok(())
     }
 
     async fn recv_subgroup(
-        mut group: serve::SubgroupWriter,
+        stream_header_type: data::StreamHeaderType,
+        mut subgroup_writer: serve::SubgroupWriter,
         mut reader: Reader,
     ) -> Result<(), SessionError> {
-        log::trace!("received group: {:?}", group.info);
+        log::trace!("received subgroup: {:?}", subgroup_writer.info);
 
         while !reader.done().await? {
-            let object: data::SubgroupObject = reader.decode().await?;
 
-            log::trace!("received group object: {:?}", object);
-            let mut remain = object.payload_length;
-            let mut object = group.create(object.payload_length)?;
+            // Need to be able to decode the subgroup object conditionally based on the stream header type
+            // read the object payload length into remaining_bytes
+            let mut remaining_bytes = match stream_header_type.has_extension_headers() {
+                true => {
+                    let object = reader.decode::<data::SubgroupObjectExt>().await?;
+                    log::trace!("received subgroup object with extension headers: {:?}", object);
+                    object.payload_length
+                },
+                false => {
+                    let object = reader.decode::<data::SubgroupObject>().await?;
+                    log::trace!("received subgroup object: {:?}", object);
+                    object.payload_length
+                }
+            };
 
-            while remain > 0 {
+            // TODO SLG - object_id_delta, extension headers and object status are being ignored and not passed on
+
+            let mut object_writer = subgroup_writer.create(remaining_bytes)?;
+
+            while remaining_bytes > 0 {
                 let data = reader
-                    .read_chunk(remain)
+                    .read_chunk(remaining_bytes)
                     .await?
                     .ok_or(SessionError::WrongSize)?;
-                log::trace!("received group payload: {:?}", data.len());
-                remain -= data.len();
-                object.write(data)?;
+                //log::trace!("received subgroup payload: {:?}", data.len());
+                remaining_bytes -= data.len();
+                object_writer.write(data)?;
             }
         }
 
