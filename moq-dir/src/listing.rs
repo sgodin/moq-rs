@@ -33,7 +33,7 @@ impl ListingWriter {
         match self.subgroup {
             // Create a delta if the current subgroup is small enough.
             Some(ref mut subgroup) if self.current.len() < 2 * subgroup.len() => {
-                let msg = format!("+{}", name);
+                let msg = format!("+{name}");
                 subgroup.write(msg.into())?;
             }
             // Otherwise create a snapshot with every element.
@@ -51,7 +51,7 @@ impl ListingWriter {
         match self.subgroup {
             // Create a delta if the current subgroup is small enough.
             Some(ref mut subgroup) if self.current.len() < 2 * subgroup.len() => {
-                let msg = format!("-{}", name);
+                let msg = format!("-{name}");
                 subgroup.write(msg.into())?;
             }
             // Otherwise create a snapshot with every element.

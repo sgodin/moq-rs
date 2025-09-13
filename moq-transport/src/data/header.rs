@@ -24,7 +24,7 @@ pub enum StreamHeaderType {
 impl StreamHeaderType {
     pub fn is_subgroup(&self) -> bool {
         let header_type = *self as u64;
-        header_type >= 0x10 && header_type <= 0x1d
+       (0x10..=0x1d).contains(&header_type)
     }
 
     pub fn is_fetch(&self) -> bool {
@@ -32,26 +32,22 @@ impl StreamHeaderType {
     }
 
     pub fn has_extension_headers(&self) -> bool {
-        match *self {
+        matches!(*self,
             StreamHeaderType::SubgroupZeroIdExt |
             StreamHeaderType::SubgroupOjbectIdExt |
             StreamHeaderType::SubgroupIdExt |
             StreamHeaderType::SubgroupZeroIdExtEndOfGroup |
             StreamHeaderType::SubgroupOjbectIdExtEndOfGroup |
             StreamHeaderType::SubgroupIdExtEndOfGroup |
-            StreamHeaderType::Fetch => true,
-            _ => false
-        }
+            StreamHeaderType::Fetch)
     }
 
     pub fn has_subgroup_id(&self) -> bool {
-        match *self {
+        matches!(*self,
             StreamHeaderType::SubgroupId |
             StreamHeaderType::SubgroupIdExt |
             StreamHeaderType::SubgroupIdEndOfGroup |
-            StreamHeaderType::SubgroupIdExtEndOfGroup => true,
-            _ => false
-        }
+            StreamHeaderType::SubgroupIdExtEndOfGroup)
     }
 }
 
@@ -142,12 +138,10 @@ impl Encode for StreamHeader {
             } else {
                 return Err(EncodeError::MissingField("SubgroupHeader".to_string()));
             }
+        } else if let Some(fetch_header) = &self.fetch_header {
+            fetch_header.encode(w)?;
         } else {
-            if let Some(fetch_header) = &self.fetch_header {
-                fetch_header.encode(w)?;
-            } else {
-                return Err(EncodeError::MissingField("FetchHeader".to_string()));
-            }
+            return Err(EncodeError::MissingField("FetchHeader".to_string()));
         }
 
         Ok(())

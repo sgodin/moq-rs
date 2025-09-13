@@ -152,7 +152,7 @@ async fn patch_origin(
 }
 
 fn origin_key(namespace: &str) -> String {
-    format!("origin.{}", namespace)
+    format!("origin.{namespace}")
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -176,12 +176,12 @@ impl IntoResponse for AppError {
         match self {
             AppError::Redis(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("redis error: {}", e),
+                format!("redis error: {e}"),
             )
                 .into_response(),
             AppError::Json(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("json error: {}", e),
+                format!("json error: {e}"),
             )
                 .into_response(),
             AppError::NotFound => StatusCode::NOT_FOUND.into_response(),

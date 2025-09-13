@@ -41,7 +41,6 @@ impl Decode for KeyValuePair {
             if length > u16::MAX as usize {
                 return Err(DecodeError::KeyValuePairLengthExceeded());
             }
-            let length = length as usize;  // won't fail due to previous check
 
             Self::decode_remaining(r, length)?;
             let mut buf = vec![0; length];

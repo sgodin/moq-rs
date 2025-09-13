@@ -196,7 +196,7 @@ impl Encode for Datagram {
             DatagramType::PayloadExtEndOfGroup => {
                 if let Some(payload) = &self.payload {
                     Self::encode_remaining(w, payload.len())?;
-                    w.put_slice(&payload);
+                    w.put_slice(payload);
                 } else {
                     return Err(EncodeError::MissingField("Payload".to_string()));
                 }

@@ -252,7 +252,8 @@ impl Decode for usize {
    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let var = VarInt::decode(r)?;
         // Note: If 32-bit system, then VarInt may not fit into usize
-        Ok(usize::try_from(var).map_err(|_| DecodeError::BoundsExceeded(BoundsExceeded))?)
+        #[allow(clippy::unnecessary_fallible_conversions)]
+        usize::try_from(var).map_err(|_| DecodeError::BoundsExceeded(BoundsExceeded))
     }
 }
 

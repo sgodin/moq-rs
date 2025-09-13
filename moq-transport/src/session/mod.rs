@@ -133,10 +133,10 @@ impl Session {
             // We are the server, so the first request id is 1
             Ok(Session::new(session, sender, recver, 1))
         } else {
-            return Err(SessionError::Version(
+            Err(SessionError::Version(
                 client.versions,
                 server_versions,
-            ));
+            ))
         }
     }
 

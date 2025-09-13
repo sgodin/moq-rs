@@ -162,7 +162,7 @@ impl Media {
         // Produce the catalog
         for trak in &moov.traks {
             let id = trak.tkhd.track_id;
-            let name = format!("{}.m4s", id);
+            let name = format!("{id}.m4s");
 
             let timescale = track_timescale(moov, id);
             let handler = (&trak.mdia.hdlr.handler_type).try_into()?;

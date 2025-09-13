@@ -80,7 +80,7 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
         let mut tracks = vec![];
         for trak in &moov.traks {
             let id = trak.tkhd.track_id;
-            let name = format!("{}.m4s", id);
+            let name = format!("{id}.m4s");
             info!("found track {name}");
             let mut active = false;
             if !has_video && trak.mdia.minf.stbl.stsd.avc1.is_some() {

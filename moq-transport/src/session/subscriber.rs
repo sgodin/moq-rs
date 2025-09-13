@@ -79,7 +79,7 @@ impl Subscriber {
         match &msg {
             message::Subscriber::PublishNamespaceCancel(msg) => self.drop_publish_namespace(&msg.track_namespace),
             // TODO SLG - there is no longer a namespace in the error, need to map via request id
-            //message::Subscriber::AnnounceError(msg) => self.drop_announce(&msg.track_namespace),
+            message::Subscriber::PublishNamespaceError(_msg) => todo!(),   //self.drop_announce(&msg.track_namespace),
             _ => {}
         }
 

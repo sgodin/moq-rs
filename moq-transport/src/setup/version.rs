@@ -8,8 +8,8 @@ use std::fmt;
 pub struct Version(pub u32);
 
 impl Version {
-    /// Note: older draft versions are NOT included here, as we will no longer
-    ///       handle the old SETUP message type numbers of (0x40 and 0x41)
+    // Note: older draft versions are NOT included here, as we will no longer
+    //       handle the old SETUP message type numbers of (0x40 and 0x41)
 
     /// First version we might see in CLIENT_SETUP (0x20) or SERVER_SETUP (0x21)
     /// https://www.ietf.org/archive/id/draft-ietf-moq-transport-11.html
