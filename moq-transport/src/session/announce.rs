@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, ops};
 
-use crate::coding::Tuple;
+use crate::coding::TrackNamespace;
 use crate::watch::State;
 use crate::{message, serve::ServeError};
 
@@ -8,7 +8,8 @@ use super::{Publisher, Subscribed, TrackStatusRequested};
 
 #[derive(Debug, Clone)]
 pub struct AnnounceInfo {
-    pub namespace: Tuple,
+    pub request_id: u64,
+    pub namespace: TrackNamespace,
 }
 
 struct AnnounceState {
@@ -46,13 +47,19 @@ pub struct Announce {
 }
 
 impl Announce {
-    pub(super) fn new(mut publisher: Publisher, namespace: Tuple) -> (Announce, AnnounceRecv) {
+    pub(super) fn new(
+        mut publisher: Publisher,
+        request_id: u64,
+        namespace: TrackNamespace,
+    ) -> (Announce, AnnounceRecv) {
         let info = AnnounceInfo {
+            request_id,
             namespace: namespace.clone(),
         };
 
-        publisher.send_message(message::Announce {
-            namespace,
+        publisher.send_message(message::PublishNamespace {
+            id: request_id,
+            track_namespace: namespace.clone(),
             params: Default::default(),
         });
 
@@ -63,7 +70,10 @@ impl Announce {
             info,
             state: send,
         };
-        let recv = AnnounceRecv { state: recv };
+        let recv = AnnounceRecv {
+            state: recv,
+            request_id,
+        };
 
         (send, recv)
     }
@@ -150,8 +160,8 @@ impl Drop for Announce {
             return;
         }
 
-        self.publisher.send_message(message::Unannounce {
-            namespace: self.namespace.clone(),
+        self.publisher.send_message(message::PublishNamespaceDone {
+            track_namespace: self.namespace.clone(),
         });
     }
 }
@@ -166,6 +176,7 @@ impl ops::Deref for Announce {
 
 pub(super) struct AnnounceRecv {
     state: State<AnnounceState>,
+    pub request_id: u64, // TODO SLG - Announcements need to be looked up by both request_id and namespace, consider 2 hashmaps in publisher instead of this
 }
 
 impl AnnounceRecv {

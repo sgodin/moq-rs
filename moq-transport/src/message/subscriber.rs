@@ -44,18 +44,19 @@ macro_rules! subscriber_msgs {
     }
 }
 
+// Defines messages that a SUBSCRIBER would send, or that a PUBLISHER would handle
 subscriber_msgs! {
-    AnnounceOk,
-    AnnounceError,
-    AnnounceCancel,
     Subscribe,
-    Unsubscribe,
     SubscribeUpdate,
-    TrackStatusRequest,
-    SubscribeNamespace,
-    SubscribeNamespaceOk,
-    SubscribeNamespaceError,
-    UnsubscribeNamespace,
+    Unsubscribe,
     Fetch,
     FetchCancel,
+    TrackStatus,
+    SubscribeNamespace,
+    UnsubscribeNamespace,
+    PublishNamespaceCancel,
+    PublishNamespaceOk,
+    PublishNamespaceError,
+    PublishOk,
+    PublishError,
 }

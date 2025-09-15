@@ -3,24 +3,27 @@ use std::ops;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
-use crate::coding::Encode;
+use crate::coding::{Encode, Location, ReasonPhrase};
 use crate::serve::{ServeError, TrackReaderMode};
 use crate::watch::State;
 use crate::{data, message, serve};
 
 use super::{Publisher, SessionError, SubscribeInfo, Writer};
 
+// This file defines Publisher handling of inbound Subscriptions
+
 #[derive(Debug)]
 struct SubscribedState {
-    max_group_id: Option<(u64, u64)>,
+    largest_location: Option<Location>,
     closed: Result<(), ServeError>,
 }
 
 impl SubscribedState {
-    fn update_max_group_id(&mut self, group_id: u64, object_id: u64) -> Result<(), ServeError> {
-        if let Some((max_group, max_object)) = self.max_group_id {
-            if group_id >= max_group && object_id >= max_object {
-                self.max_group_id = Some((group_id, object_id));
+    fn update_largest_location(&mut self, group_id: u64, object_id: u64) -> Result<(), ServeError> {
+        if let Some(current_largest_location) = self.largest_location {
+            let update_largest_location = Location::new(group_id, object_id);
+            if update_largest_location > current_largest_location {
+                self.largest_location = Some(update_largest_location);
             }
         }
 
@@ -31,19 +34,30 @@ impl SubscribedState {
 impl Default for SubscribedState {
     fn default() -> Self {
         Self {
-            max_group_id: None,
+            largest_location: None,
             closed: Ok(()),
         }
     }
 }
 
 pub struct Subscribed {
+    /// The sessions Publisher manager, used to send control messages,
+    /// create new QUIC streams, and send datagrams
     publisher: Publisher,
-    state: State<SubscribedState>,
-    msg: message::Subscribe,
-    ok: bool,
 
+    /// The Subscribe request message that created this subscription
+    msg: message::Subscribe,
+
+    /// The tracknamespace and trackname for the subscription.
+    /// TODO SLG - is this needed? we have this information in the stored Subscribe
+    ///            message.
     pub info: SubscribeInfo,
+
+    state: State<SubscribedState>,
+
+    /// Tracks if SubscribeOk has been sent yet or not. Used to send
+    /// SubscribeDone vs SubscribeError on drop.
+    ok: bool,
 }
 
 impl Subscribed {
@@ -82,20 +96,23 @@ impl Subscribed {
         self.state
             .lock_mut()
             .ok_or(ServeError::Cancel)?
-            .max_group_id = latest;
+            .largest_location = latest;
 
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
-            expires: None,
+            track_alias: 0,
+            expires: 3600,                                // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
-            latest,
+            content_exists: latest.is_some(),
+            largest_location: latest,
+            params: Default::default(),
         });
 
-        self.ok = true; // So we sent SubscribeDone on drop
+        self.ok = true; // So we send SubscribeDone on drop
 
         match track.mode().await? {
             // TODO cancel track/datagrams on closed
-            TrackReaderMode::Stream(stream) => self.serve_track(stream).await,
+            TrackReaderMode::Stream(_stream) => panic!("deprecated"),
             TrackReaderMode::Subgroups(subgroups) => self.serve_subgroups(subgroups).await,
             TrackReaderMode::Datagrams(datagrams) => self.serve_datagrams(datagrams).await,
         }
@@ -144,77 +161,26 @@ impl Drop for Subscribed {
             .err()
             .cloned()
             .unwrap_or(ServeError::Done);
-        let max_group_id = state.max_group_id;
         drop(state); // Important to avoid a deadlock
 
         if self.ok {
-            self.publisher.send_message(message::SubscribeDone {
+            self.publisher.send_message(message::PublishDone {
                 id: self.msg.id,
-                last: max_group_id,
-                code: err.code(),
-                reason: err.to_string(),
+                status_code: err.code(),
+                stream_count: 0, // TODO SLG
+                reason: ReasonPhrase(err.to_string()),
             });
         } else {
             self.publisher.send_message(message::SubscribeError {
                 id: self.msg.id,
-                alias: 0,
-                code: err.code(),
-                reason: err.to_string(),
+                error_code: err.code(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         };
     }
 }
 
 impl Subscribed {
-    async fn serve_track(&mut self, mut track: serve::StreamReader) -> Result<(), SessionError> {
-        let mut stream = self.publisher.open_uni().await?;
-
-        // TODO figure out u32 vs u64 priority
-        stream.set_priority(track.priority as i32);
-
-        let mut writer = Writer::new(stream);
-
-        let header: data::Header = data::TrackHeader {
-            subscribe_id: self.msg.id,
-            track_alias: self.msg.track_alias,
-            publisher_priority: track.priority,
-        }
-        .into();
-
-        writer.encode(&header).await?;
-
-        log::trace!("sent track header: {:?}", header);
-
-        while let Some(mut group) = track.next().await? {
-            while let Some(mut object) = group.next().await? {
-                let header = data::TrackObject {
-                    group_id: object.group_id,
-                    object_id: object.object_id,
-                    size: object.size,
-                    status: object.status,
-                };
-
-                self.state
-                    .lock_mut()
-                    .ok_or(ServeError::Done)?
-                    .update_max_group_id(object.group_id, object.object_id)?;
-
-                writer.encode(&header).await?;
-
-                log::trace!("sent track object: {:?}", header);
-
-                while let Some(chunk) = object.read().await? {
-                    writer.write(&chunk).await?;
-                    log::trace!("sent track payload: {:?}", chunk.len());
-                }
-
-                log::trace!("sent track done");
-            }
-        }
-
-        Ok(())
-    }
-
     async fn serve_subgroups(
         &mut self,
         mut subgroups: serve::SubgroupsReader,
@@ -227,10 +193,10 @@ impl Subscribed {
                 res = subgroups.next(), if done.is_none() => match res {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
-                            subscribe_id: self.msg.id,
-                            track_alias: self.msg.track_alias,
+                            header_type: data::StreamHeaderType::SubgroupId,  // SubGroupId = Yes, Extensions = No, ContainsEnd = No
+                            track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
                             group_id: subgroup.group_id,
-                            subgroup_id: subgroup.subgroup_id,
+                            subgroup_id: Some(subgroup.subgroup_id),
                             publisher_priority: subgroup.priority,
                         };
 
@@ -240,7 +206,7 @@ impl Subscribed {
 
                         tasks.push(async move {
                             if let Err(err) = Self::serve_subgroup(header, subgroup, publisher, state).await {
-                                log::warn!("failed to serve group: {:?}, error: {}", info, err);
+                                log::warn!("failed to serve subgroup: {:?}, error: {}", info, err);
                             }
                         });
                     },
@@ -256,44 +222,52 @@ impl Subscribed {
 
     async fn serve_subgroup(
         header: data::SubgroupHeader,
-        mut subgroup: serve::SubgroupReader,
+        mut subgroup_reader: serve::SubgroupReader,
         mut publisher: Publisher,
         state: State<SubscribedState>,
     ) -> Result<(), SessionError> {
-        let mut stream = publisher.open_uni().await?;
+        let mut send_stream = publisher.open_uni().await?;
 
         // TODO figure out u32 vs u64 priority
-        stream.set_priority(subgroup.priority as i32);
+        send_stream.set_priority(subgroup_reader.priority as i32);
 
-        let mut writer = Writer::new(stream);
+        let mut writer = Writer::new(send_stream);
 
-        let header: data::Header = header.into();
+        log::trace!("sending subgroup header: {:?}", header);
+
         writer.encode(&header).await?;
 
-        log::trace!("sent group: {:?}", header);
-
-        while let Some(mut object) = subgroup.next().await? {
-            let header = data::SubgroupObject {
-                object_id: object.object_id,
-                size: object.size,
-                status: object.status,
+        while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
+            let subgroup_object = data::SubgroupObject {
+                object_id_delta: subgroup_object_reader.object_id,
+                payload_length: subgroup_object_reader.size,
+                status: if subgroup_object_reader.size == 0 {
+                    // Only set status if payload length is zero
+                    Some(subgroup_object_reader.status)
+                } else {
+                    None
+                },
             };
 
-            writer.encode(&header).await?;
+            writer.encode(&subgroup_object).await?;
 
             state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_max_group_id(subgroup.group_id, object.object_id)?;
+                .update_largest_location(
+                    subgroup_reader.group_id,
+                    subgroup_object_reader.object_id,
+                )?;
 
-            log::trace!("sent group object: {:?}", header);
+            log::trace!("sent subgroup object: {:?}", subgroup_object);
 
-            while let Some(chunk) = object.read().await? {
+            while let Some(chunk) = subgroup_object_reader.read().await? {
                 writer.write(&chunk).await?;
-                log::trace!("sent group payload: {:?}", chunk.len());
+                // payload length already logged when subgroup object is logged
+                //log::trace!("sent group payload len: {:?}", chunk.len());
             }
 
-            log::trace!("sent group done");
+            //log::trace!("sent subgroup done");
         }
 
         Ok(())
@@ -305,17 +279,18 @@ impl Subscribed {
     ) -> Result<(), SessionError> {
         while let Some(datagram) = datagrams.read().await? {
             let datagram = data::Datagram {
-                subscribe_id: self.msg.id,
-                track_alias: self.msg.track_alias,
+                datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
+                track_alias: self.msg.id, //  TODO SLG - use subscription id for now
                 group_id: datagram.group_id,
-                object_id: datagram.object_id,
+                object_id: Some(datagram.object_id),
                 publisher_priority: datagram.priority,
-                object_status: datagram.status,
-                payload_len: datagram.payload.len() as u64,
-                payload: datagram.payload,
+                extension_headers: None,
+                status: None,
+                payload: Some(datagram.payload),
             };
 
-            let mut buffer = bytes::BytesMut::with_capacity(datagram.payload.len() + 100);
+            let mut buffer =
+                bytes::BytesMut::with_capacity(datagram.payload.as_ref().unwrap().len() + 100);
             datagram.encode(&mut buffer)?;
 
             self.publisher.send_datagram(buffer.into()).await?;
@@ -324,7 +299,8 @@ impl Subscribed {
             self.state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_max_group_id(datagram.group_id, datagram.object_id)?;
+                .update_largest_location(datagram.group_id, datagram.object_id.unwrap())?;
+            // TODO SLG - fix up safety of unwrap()
         }
 
         Ok(())

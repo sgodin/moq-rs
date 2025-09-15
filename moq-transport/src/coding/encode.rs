@@ -28,11 +28,17 @@ pub enum EncodeError {
     #[error("invalid value")]
     InvalidValue,
 
-    #[error("missing field")]
-    MissingField,
+    #[error("field '{0}' missing")]
+    MissingField(String),
 
     #[error("i/o error: {0}")]
     Io(sync::Arc<io::Error>),
+
+    #[error("message too large")]
+    MsgBoundsExceeded,
+
+    #[error("field '{0}' too large")]
+    FieldBoundsExceeded(String),
 }
 
 impl From<io::Error> for EncodeError {

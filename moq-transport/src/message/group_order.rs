@@ -1,9 +1,7 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
 /// Group Order
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-05.html#section-6.4.2-4.6.1
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-05.html#priorities
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GroupOrder {
     Publisher = 0x0,
     Ascending = 0x1,
@@ -12,11 +10,9 @@ pub enum GroupOrder {
 
 impl Encode for GroupOrder {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        match self {
-            Self::Publisher => (0x0_u8).encode(w),
-            Self::Ascending => (0x1_u8).encode(w),
-            Self::Descending => (0x2_u8).encode(w),
-        }
+        let val = *self as u8;
+        val.encode(w)?;
+        Ok(())
     }
 }
 
@@ -28,5 +24,43 @@ impl Decode for GroupOrder {
             0x2 => Ok(Self::Descending),
             _ => Err(DecodeError::InvalidGroupOrder),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        let go = GroupOrder::Publisher;
+        go.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0x00]);
+        let decoded = GroupOrder::decode(&mut buf).unwrap();
+        assert_eq!(decoded, go);
+
+        let go = GroupOrder::Ascending;
+        go.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0x01]);
+        let decoded = GroupOrder::decode(&mut buf).unwrap();
+        assert_eq!(decoded, go);
+
+        let go = GroupOrder::Descending;
+        go.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0x02]);
+        let decoded = GroupOrder::decode(&mut buf).unwrap();
+        assert_eq!(decoded, go);
+    }
+
+    #[test]
+    fn decode_bad_value() {
+        let data: Vec<u8> = vec![0x03]; // Invalid filter type
+        let mut buf: Bytes = data.into();
+        let result = GroupOrder::decode(&mut buf);
+        assert!(matches!(result, Err(DecodeError::InvalidGroupOrder)));
     }
 }

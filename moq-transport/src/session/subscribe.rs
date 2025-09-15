@@ -1,9 +1,9 @@
 use std::ops;
 
 use crate::{
-    coding::Tuple,
+    coding::TrackNamespace,
     data,
-    message::{self, FilterType, GroupOrder, SubscribeLocation, SubscribePair},
+    message::{self, FilterType, GroupOrder},
     serve::{self, ServeError, TrackWriter, TrackWriterMode},
 };
 
@@ -13,7 +13,7 @@ use super::Subscriber;
 
 #[derive(Debug, Clone)]
 pub struct SubscribeInfo {
-    pub namespace: Tuple,
+    pub namespace: TrackNamespace,
     pub name: String,
 }
 
@@ -49,22 +49,15 @@ impl Subscribe {
     ) -> (Subscribe, SubscribeRecv) {
         subscriber.send_message(message::Subscribe {
             id,
-            track_alias: id,
             track_namespace: track.namespace.clone(),
             track_name: track.name.clone(),
             // TODO add prioritization logic on the publisher side
             subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
             group_order: GroupOrder::Publisher, // defer to publisher send order
-            filter_type: FilterType::LatestGroup,
-            // TODO add these to the publisher.
-            start: Some(SubscribePair {
-                group: SubscribeLocation::Latest(0),
-                object: SubscribeLocation::Absolute(0),
-            }),
-            end: Some(SubscribePair {
-                group: SubscribeLocation::None,
-                object: SubscribeLocation::None,
-            }),
+            forward: true,            // default to forwarding objects
+            filter_type: FilterType::NextGroupStart,
+            start_location: None,
+            end_group_id: None,
             params: Default::default(),
         });
 
@@ -154,19 +147,6 @@ impl SubscribeRecv {
         Ok(())
     }
 
-    pub fn track(&mut self, header: data::TrackHeader) -> Result<serve::StreamWriter, ServeError> {
-        let writer = self.writer.take().ok_or(ServeError::Done)?;
-
-        let stream = match writer {
-            TrackWriterMode::Track(init) => init.stream(header.publisher_priority)?,
-            _ => return Err(ServeError::Mode),
-        };
-
-        self.writer = Some(stream.clone().into());
-
-        Ok(stream)
-    }
-
     pub fn subgroup(
         &mut self,
         header: data::SubgroupHeader,
@@ -174,6 +154,7 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut subgroups = match writer {
+            // TODO SLG - understand why both of these are needed, clock demo won't run if I comment out TrackWriteMode::Track
             TrackWriterMode::Track(init) => init.groups()?,
             TrackWriterMode::Subgroups(subgroups) => subgroups,
             _ => return Err(ServeError::Mode),
@@ -181,7 +162,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
-            subgroup_id: header.subgroup_id,
+            subgroup_id: header.subgroup_id.unwrap(), // TODO SLG - subgroup_id may not be present
             priority: header.publisher_priority,
         })?;
 
@@ -194,17 +175,17 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut datagrams = match writer {
-            TrackWriterMode::Track(init) => init.datagrams()?,
+            TrackWriterMode::Track(init) => init.datagrams()?, // TODO SLG - is this needed?
             TrackWriterMode::Datagrams(datagrams) => datagrams,
             _ => return Err(ServeError::Mode),
         };
 
+        // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
-            object_id: datagram.object_id,
+            object_id: datagram.object_id.unwrap(), // TODO SLG - make safe
             priority: datagram.publisher_priority,
-            status: datagram.object_status,
-            payload: datagram.payload,
+            payload: datagram.payload.unwrap(), // TODO SLG - datagram.payload is an Option
         })?;
 
         Ok(())

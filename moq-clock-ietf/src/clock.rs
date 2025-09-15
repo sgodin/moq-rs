@@ -67,7 +67,7 @@ impl Publisher {
                 .write(delta.clone().into())
                 .context("failed to write delta")?;
 
-            println!("{}{}", base, delta);
+            println!("{base}{delta}");
 
             let next = now + chrono::Duration::try_seconds(1).unwrap();
             let next = next.with_nanosecond(0).unwrap();
@@ -106,7 +106,7 @@ impl Subscriber {
         while let Some(mut subgroup) = track.next().await? {
             while let Some(object) = subgroup.read_next().await? {
                 let str = String::from_utf8_lossy(&object);
-                println!("{}", str);
+                println!("{str}");
             }
         }
 
@@ -125,7 +125,7 @@ impl Subscriber {
 
             while let Some(object) = subgroup.read_next().await? {
                 let str = String::from_utf8_lossy(&object);
-                println!("{}{}", base, str);
+                println!("{base}{str}");
             }
         }
 
@@ -135,7 +135,7 @@ impl Subscriber {
     async fn recv_datagrams(mut datagrams: DatagramsReader) -> anyhow::Result<()> {
         while let Some(datagram) = datagrams.read().await? {
             let str = String::from_utf8_lossy(&datagram.payload);
-            println!("{}", str);
+            println!("{str}");
         }
 
         Ok(())

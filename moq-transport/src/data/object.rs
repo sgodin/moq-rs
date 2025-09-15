@@ -1,22 +1,20 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectStatus {
-    Object = 0x0,
+    NormalObject = 0x0,
     ObjectDoesNotExist = 0x1,
     EndOfGroup = 0x3,
     EndOfTrack = 0x4,
-    EndOfSubgroup = 0x5,
 }
 
 impl Decode for ObjectStatus {
     fn decode<B: bytes::Buf>(r: &mut B) -> Result<Self, DecodeError> {
         match u64::decode(r)? {
-            0x0 => Ok(Self::Object),
+            0x0 => Ok(Self::NormalObject),
             0x1 => Ok(Self::ObjectDoesNotExist),
             0x3 => Ok(Self::EndOfGroup),
             0x4 => Ok(Self::EndOfTrack),
-            0x5 => Ok(Self::EndOfSubgroup),
             _ => Err(DecodeError::InvalidObjectStatus),
         }
     }
@@ -24,16 +22,13 @@ impl Decode for ObjectStatus {
 
 impl Encode for ObjectStatus {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        match self {
-            Self::Object => (0x0_u64).encode(w),
-            Self::ObjectDoesNotExist => (0x1_u64).encode(w),
-            Self::EndOfGroup => (0x3_u64).encode(w),
-            Self::EndOfTrack => (0x4_u64).encode(w),
-            Self::EndOfSubgroup => (0x5_u64).encode(w),
-        }
+        let val = *self as u64;
+        val.encode(w)?;
+        Ok(())
     }
 }
 
+// TODO SLG - this is not used anywhere - remove it
 #[derive(Clone, Debug)]
 pub struct ObjectHeader {
     // The subscribe ID.

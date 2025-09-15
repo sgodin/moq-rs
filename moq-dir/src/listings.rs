@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use moq_transport::coding::Tuple;
+use moq_transport::coding::TrackNamespace;
 use moq_transport::serve::{ServeError, Tracks, TracksReader, TracksWriter};
 
 use crate::{ListingReader, ListingWriter};
@@ -21,7 +21,7 @@ pub struct Listings {
 
 impl Listings {
     pub fn new(namespace: String) -> Self {
-        let (writer, _, reader) = Tracks::new(Tuple::from_utf8_path(&namespace)).produce();
+        let (writer, _, reader) = Tracks::new(TrackNamespace::from_utf8_path(&namespace)).produce();
 
         let state = State {
             writer,
