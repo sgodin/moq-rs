@@ -1,7 +1,7 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, VarInt};
 
-use std::ops::Deref;
 use std::fmt;
+use std::ops::Deref;
 
 /// A version number negotiated during the setup.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -129,20 +129,18 @@ mod tests {
     #[test]
     fn encode_decode() {
         let mut buf = BytesMut::new();
-        let versions = Versions(vec![
-            Version(1),
-            Version::DRAFT_12,
-            Version::DRAFT_13,
-        ]);
+        let versions = Versions(vec![Version(1), Version::DRAFT_12, Version::DRAFT_13]);
 
         versions.encode(&mut buf).unwrap();
         assert_eq!(
             buf.to_vec(),
             vec![
-                0x03,  // 3 Versions
-                0x01,  // Version 1
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0C,   // Version DRAFT_12 (0xff00000c)
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,   // Version DRAFT_13 (0xff00000d)
+                0x03, // 3 Versions
+                0x01, // Version 1
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
+                0x0C, // Version DRAFT_12 (0xff00000c)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
+                0x0D, // Version DRAFT_13 (0xff00000d)
             ]
         );
 

@@ -1,18 +1,18 @@
-use crate::{coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs}};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
 use crate::data::ObjectStatus;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DatagramType {
-    ObjectIdPayload              = 0x00,
-    ObjectIdPayloadExt           = 0x01,
-    ObjectIdPayloadEndOfGroup    = 0x02,
+    ObjectIdPayload = 0x00,
+    ObjectIdPayloadExt = 0x01,
+    ObjectIdPayloadEndOfGroup = 0x02,
     ObjectIdPayloadExtEndOfGroup = 0x03,
-    Payload                      = 0x04,
-    PayloadExt                   = 0x05,
-    PayloadEndOfGroup            = 0x06,
-    PayloadExtEndOfGroup         = 0x07,
-    ObjectIdStatus               = 0x20,
-    ObjectIdStatusExt            = 0x21,
+    Payload = 0x04,
+    PayloadExt = 0x05,
+    PayloadEndOfGroup = 0x06,
+    PayloadExtEndOfGroup = 0x07,
+    ObjectIdStatus = 0x20,
+    ObjectIdStatusExt = 0x21,
 }
 
 impl Decode for DatagramType {
@@ -76,12 +76,12 @@ impl Decode for Datagram {
 
         // Decode Object Id if required
         let object_id = match datagram_type {
-            DatagramType::ObjectIdPayload |
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadEndOfGroup |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::ObjectIdStatus |
-            DatagramType::ObjectIdStatusExt => Some(u64::decode(r)?),
+            DatagramType::ObjectIdPayload
+            | DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadEndOfGroup
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::ObjectIdStatus
+            | DatagramType::ObjectIdStatusExt => Some(u64::decode(r)?),
             _ => None,
         };
 
@@ -89,31 +89,32 @@ impl Decode for Datagram {
 
         // Decode Extension Headers if required
         let extension_headers = match datagram_type {
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::PayloadExt |
-            DatagramType::PayloadExtEndOfGroup |
-            DatagramType::ObjectIdStatusExt => Some(KeyValuePairs::decode(r)?),
+            DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::PayloadExt
+            | DatagramType::PayloadExtEndOfGroup
+            | DatagramType::ObjectIdStatusExt => Some(KeyValuePairs::decode(r)?),
             _ => None,
         };
 
         // Decode Status if required
         let status = match datagram_type {
-            DatagramType::ObjectIdStatus |
-            DatagramType::ObjectIdStatusExt => Some(ObjectStatus::decode(r)?),
+            DatagramType::ObjectIdStatus | DatagramType::ObjectIdStatusExt => {
+                Some(ObjectStatus::decode(r)?)
+            }
             _ => None,
         };
 
         // Decode Payload if required
         let payload = match datagram_type {
-            DatagramType::ObjectIdPayload |
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadEndOfGroup |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::Payload |
-            DatagramType::PayloadExt |
-            DatagramType::PayloadEndOfGroup |
-            DatagramType::PayloadExtEndOfGroup => Some(r.copy_to_bytes(r.remaining())),
+            DatagramType::ObjectIdPayload
+            | DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadEndOfGroup
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::Payload
+            | DatagramType::PayloadExt
+            | DatagramType::PayloadEndOfGroup
+            | DatagramType::PayloadExtEndOfGroup => Some(r.copy_to_bytes(r.remaining())),
             _ => None,
         };
 
@@ -138,12 +139,12 @@ impl Encode for Datagram {
 
         // Encode Object Id if required
         match self.datagram_type {
-            DatagramType::ObjectIdPayload |
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadEndOfGroup |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::ObjectIdStatus |
-            DatagramType::ObjectIdStatusExt => {
+            DatagramType::ObjectIdPayload
+            | DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadEndOfGroup
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::ObjectIdStatus
+            | DatagramType::ObjectIdStatusExt => {
                 if let Some(object_id) = &self.object_id {
                     object_id.encode(w)?;
                 } else {
@@ -157,11 +158,11 @@ impl Encode for Datagram {
 
         // Encode Extension Headers if required
         match self.datagram_type {
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::PayloadExt |
-            DatagramType::PayloadExtEndOfGroup |
-            DatagramType::ObjectIdStatusExt => {
+            DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::PayloadExt
+            | DatagramType::PayloadExtEndOfGroup
+            | DatagramType::ObjectIdStatusExt => {
                 if let Some(extension_headers) = &self.extension_headers {
                     extension_headers.encode(w)?;
                 } else {
@@ -173,8 +174,7 @@ impl Encode for Datagram {
 
         // Decode Status if required
         match self.datagram_type {
-            DatagramType::ObjectIdStatus |
-            DatagramType::ObjectIdStatusExt => {
+            DatagramType::ObjectIdStatus | DatagramType::ObjectIdStatusExt => {
                 if let Some(status) = &self.status {
                     status.encode(w)?;
                 } else {
@@ -186,14 +186,14 @@ impl Encode for Datagram {
 
         // Decode Payload if required
         match self.datagram_type {
-            DatagramType::ObjectIdPayload |
-            DatagramType::ObjectIdPayloadExt |
-            DatagramType::ObjectIdPayloadEndOfGroup |
-            DatagramType::ObjectIdPayloadExtEndOfGroup |
-            DatagramType::Payload |
-            DatagramType::PayloadExt |
-            DatagramType::PayloadEndOfGroup |
-            DatagramType::PayloadExtEndOfGroup => {
+            DatagramType::ObjectIdPayload
+            | DatagramType::ObjectIdPayloadExt
+            | DatagramType::ObjectIdPayloadEndOfGroup
+            | DatagramType::ObjectIdPayloadExtEndOfGroup
+            | DatagramType::Payload
+            | DatagramType::PayloadExt
+            | DatagramType::PayloadEndOfGroup
+            | DatagramType::PayloadExtEndOfGroup => {
                 if let Some(payload) = &self.payload {
                     Self::encode_remaining(w, payload.len())?;
                     w.put_slice(payload);
@@ -211,8 +211,8 @@ impl Encode for Datagram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode_datagram_type() {
@@ -220,61 +220,61 @@ mod tests {
 
         let dt = DatagramType::ObjectIdPayload;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x00 ]);
+        assert_eq!(buf.to_vec(), vec![0x00]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::ObjectIdPayloadExt;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        assert_eq!(buf.to_vec(), vec![0x01]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::ObjectIdPayloadEndOfGroup;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x02 ]);
+        assert_eq!(buf.to_vec(), vec![0x02]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::ObjectIdPayloadExtEndOfGroup;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x03 ]);
+        assert_eq!(buf.to_vec(), vec![0x03]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::Payload;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x04 ]);
+        assert_eq!(buf.to_vec(), vec![0x04]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::PayloadExt;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x05 ]);
+        assert_eq!(buf.to_vec(), vec![0x05]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::PayloadEndOfGroup;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x06 ]);
+        assert_eq!(buf.to_vec(), vec![0x06]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::PayloadExtEndOfGroup;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x07 ]);
+        assert_eq!(buf.to_vec(), vec![0x07]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::ObjectIdStatus;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x20 ]);
+        assert_eq!(buf.to_vec(), vec![0x20]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
 
         let dt = DatagramType::ObjectIdStatusExt;
         dt.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x21 ]);
+        assert_eq!(buf.to_vec(), vec![0x21]);
         let decoded = DatagramType::decode(&mut buf).unwrap();
         assert_eq!(decoded, dt);
     }
@@ -535,4 +535,3 @@ mod tests {
         // TODO SLG - add tests
     }
 }
-

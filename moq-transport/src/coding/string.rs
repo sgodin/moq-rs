@@ -37,9 +37,13 @@ mod tests {
 
         let s = "teststring".to_string();
         s.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x0a,  // Length of "teststring" is 10
-            0x74, 0x65, 0x73, 0x74, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67 ]);
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x0a, // Length of "teststring" is 10
+                0x74, 0x65, 0x73, 0x74, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67
+            ]
+        );
         let decoded = String::decode(&mut buf).unwrap();
         assert_eq!(decoded, s);
     }

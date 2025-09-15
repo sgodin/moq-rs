@@ -1,4 +1,6 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace};
+use crate::coding::{
+    Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace,
+};
 use crate::message::FilterType;
 use crate::message::GroupOrder;
 
@@ -12,7 +14,7 @@ pub struct Subscribe {
 
     /// Track properties
     pub track_namespace: TrackNamespace,
-    pub track_name: String,  // TODO SLG - consider making a FullTrackName base struct (total size limit of 4096)
+    pub track_name: String, // TODO SLG - consider making a FullTrackName base struct (total size limit of 4096)
 
     /// Subscriber Priority
     pub subscriber_priority: u8,
@@ -241,4 +243,3 @@ mod tests {
         assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 }
-

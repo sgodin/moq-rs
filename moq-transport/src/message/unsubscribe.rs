@@ -30,9 +30,7 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = Unsubscribe {
-            id: 12345,
-        };
+        let msg = Unsubscribe { id: 12345 };
         msg.encode(&mut buf).unwrap();
         let decoded = Unsubscribe::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);

@@ -19,7 +19,11 @@ impl Decode for PublishNamespace {
         let track_namespace = TrackNamespace::decode(r)?;
         let params = KeyValuePairs::decode(r)?;
 
-        Ok(Self { id, track_namespace, params })
+        Ok(Self {
+            id,
+            track_namespace,
+            params,
+        })
     }
 }
 
@@ -56,4 +60,3 @@ mod tests {
         assert_eq!(decoded, msg);
     }
 }
-

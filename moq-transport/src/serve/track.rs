@@ -18,7 +18,7 @@ use super::{
     Datagrams, DatagramsReader, DatagramsWriter, ObjectsWriter, ServeError, Stream, StreamReader,
     StreamWriter, Subgroups, SubgroupsReader, SubgroupsWriter,
 };
-use crate::coding::{TrackNamespace, Location};
+use crate::coding::{Location, TrackNamespace};
 use paste::paste;
 use std::{ops::Deref, sync::Arc};
 

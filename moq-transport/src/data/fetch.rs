@@ -1,5 +1,5 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
-use crate::data::{ObjectStatus,StreamHeaderType};
+use crate::data::{ObjectStatus, StreamHeaderType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FetchHeader {
@@ -13,7 +13,10 @@ pub struct FetchHeader {
 // Note:  Not using the Decode trait, since we need to know the header_type to properly parse this, and it
 //        is read before knowing we need to decode this.
 impl FetchHeader {
-    pub fn decode<R: bytes::Buf>(header_type: StreamHeaderType, r: &mut R) -> Result<Self, DecodeError> {
+    pub fn decode<R: bytes::Buf>(
+        header_type: StreamHeaderType,
+        r: &mut R,
+    ) -> Result<Self, DecodeError> {
         let request_id = u64::decode(r)?;
 
         Ok(Self {

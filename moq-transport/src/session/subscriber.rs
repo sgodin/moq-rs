@@ -47,14 +47,12 @@ impl Subscriber {
     }
 
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) =
-            Session::accept(session).await?;
+        let (session, _, subscriber) = Session::accept(session).await?;
         Ok((session, subscriber.unwrap()))
     }
 
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) =
-            Session::connect(session).await?;
+        let (session, _, subscriber) = Session::connect(session).await?;
         Ok((session, subscriber))
     }
 
@@ -77,9 +75,11 @@ impl Subscriber {
 
         // Remove our entry on terminal state.
         match &msg {
-            message::Subscriber::PublishNamespaceCancel(msg) => self.drop_publish_namespace(&msg.track_namespace),
+            message::Subscriber::PublishNamespaceCancel(msg) => {
+                self.drop_publish_namespace(&msg.track_namespace)
+            }
             // TODO SLG - there is no longer a namespace in the error, need to map via request id
-            message::Subscriber::PublishNamespaceError(_msg) => todo!(),   //self.drop_announce(&msg.track_namespace),
+            message::Subscriber::PublishNamespaceError(_msg) => todo!(), //self.drop_announce(&msg.track_namespace),
             _ => {}
         }
 
@@ -91,14 +91,14 @@ impl Subscriber {
         let res = match &msg {
             message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
             message::Publisher::PublishNamespaceDone(msg) => self.recv_publish_namespace_done(msg),
-            message::Publisher::Publish(_msg) => todo!(),  // TODO
+            message::Publisher::Publish(_msg) => todo!(), // TODO
             message::Publisher::PublishDone(msg) => self.recv_publish_done(msg),
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
             message::Publisher::TrackStatusError(_msg) => todo!(), // TODO
-            message::Publisher::FetchOk(_msg) => todo!(), // TODO
-            message::Publisher::FetchError(_msg) => todo!(), // TODO
+            message::Publisher::FetchOk(_msg) => todo!(),          // TODO
+            message::Publisher::FetchError(_msg) => todo!(),       // TODO
             message::Publisher::SubscribeNamespaceOk(_msg) => todo!(),
             message::Publisher::SubscribeNamespaceError(_msg) => todo!(),
         };
@@ -111,7 +111,10 @@ impl Subscriber {
         res
     }
 
-    fn recv_publish_namespace(&mut self, msg: &message::PublishNamespace) -> Result<(), SessionError> {
+    fn recv_publish_namespace(
+        &mut self,
+        msg: &message::PublishNamespace,
+    ) -> Result<(), SessionError> {
         let mut announces = self.announced.lock().unwrap();
 
         let entry = match announces.entry(msg.track_namespace.clone()) {
@@ -130,7 +133,10 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_publish_namespace_done(&mut self, msg: &message::PublishNamespaceDone) -> Result<(), SessionError> {
+    fn recv_publish_namespace_done(
+        &mut self,
+        msg: &message::PublishNamespaceDone,
+    ) -> Result<(), SessionError> {
         if let Some(announce) = self.announced.lock().unwrap().remove(&msg.track_namespace) {
             announce.recv_unannounce()?;
         }
@@ -226,7 +232,9 @@ impl Subscriber {
 
         match writer {
             //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
-            Writer::Subgroup(subgroup) => Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?,
+            Writer::Subgroup(subgroup) => {
+                Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?
+            }
         };
 
         Ok(())
@@ -240,15 +248,17 @@ impl Subscriber {
         log::trace!("received subgroup: {:?}", subgroup_writer.info);
 
         while !reader.done().await? {
-
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
             let mut remaining_bytes = match stream_header_type.has_extension_headers() {
                 true => {
                     let object = reader.decode::<data::SubgroupObjectExt>().await?;
-                    log::trace!("received subgroup object with extension headers: {:?}", object);
+                    log::trace!(
+                        "received subgroup object with extension headers: {:?}",
+                        object
+                    );
                     object.payload_length
-                },
+                }
                 false => {
                     let object = reader.decode::<data::SubgroupObject>().await?;
                     log::trace!("received subgroup object: {:?}", object);
@@ -282,7 +292,8 @@ impl Subscriber {
             .subscribes
             .lock()
             .unwrap()
-            .get_mut(&datagram.track_alias)  // TODO SLG - look up subscription with track_alias, not subscription id - fix me!
+            .get_mut(&datagram.track_alias)
+        // TODO SLG - look up subscription with track_alias, not subscription id - fix me!
         {
             subscribe.datagram(datagram)?;
         }

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Value {
@@ -19,11 +19,17 @@ impl KeyValuePair {
     }
 
     pub fn new_int(key: u64, value: u64) -> Self {
-        Self { key, value: Value::IntValue(value) }
+        Self {
+            key,
+            value: Value::IntValue(value),
+        }
     }
 
     pub fn new_bytes(key: u64, value: Vec<u8>) -> Self {
-        Self { key, value: Value::BytesValue(value) }
+        Self {
+            key,
+            value: Value::BytesValue(value),
+        }
     }
 }
 
@@ -54,7 +60,8 @@ impl Encode for KeyValuePair {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         match &self.value {
             Value::IntValue(v) => {
-                if(self.key % 2) != 0 {  // key must be even for IntValue
+                if (self.key % 2) != 0 {
+                    // key must be even for IntValue
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;
@@ -62,7 +69,8 @@ impl Encode for KeyValuePair {
                 Ok(())
             }
             Value::BytesValue(v) => {
-                if(self.key % 2) == 0 {  // key must be odd for BytesValue
+                if (self.key % 2) == 0 {
+                    // key must be odd for BytesValue
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;
@@ -133,12 +141,11 @@ impl Encode for KeyValuePairs {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode_keyvaluepair() {
@@ -152,26 +159,26 @@ mod tests {
         // Type=0, VarInt value=0
         let kvp = KeyValuePair::new(0, Value::IntValue(0));
         kvp.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x00, 0x00 ]);
+        assert_eq!(buf.to_vec(), vec![0x00, 0x00]);
         let decoded = KeyValuePair::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvp);
 
         // Type=100, VarInt value=100
         let kvp = KeyValuePair::new(100, Value::IntValue(100));
         kvp.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x40, 0x64, 0x40, 0x64 ]); // 2 2-byte VarInts with first 2 bits as 01
+        assert_eq!(buf.to_vec(), vec![0x40, 0x64, 0x40, 0x64]); // 2 2-byte VarInts with first 2 bits as 01
         let decoded = KeyValuePair::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvp);
 
         // Type=0, Bytes value=[1,2,3,4,5] - illegal with even key/type
-        let kvp = KeyValuePair::new(0, Value::BytesValue(vec![ 0x01, 0x02, 0x03, 0x04, 0x05]));
+        let kvp = KeyValuePair::new(0, Value::BytesValue(vec![0x01, 0x02, 0x03, 0x04, 0x05]));
         let decoded = kvp.encode(&mut buf);
         assert!(matches!(decoded.unwrap_err(), EncodeError::InvalidValue));
 
         // Type=1, Bytes value=[1,2,3,4,5]
-        let kvp = KeyValuePair::new(1, Value::BytesValue(vec![ 0x01, 0x02, 0x03, 0x04, 0x05]));
+        let kvp = KeyValuePair::new(1, Value::BytesValue(vec![0x01, 0x02, 0x03, 0x04, 0x05]));
         kvp.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05 ]);
+        assert_eq!(buf.to_vec(), vec![0x01, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05]);
         let decoded = KeyValuePair::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvp);
     }
@@ -179,10 +186,10 @@ mod tests {
     #[test]
     fn decode_badtype() {
         // Simulate a VarInt value of 5, but with an odd key/type
-        let data: Vec<u8> = vec![ 0x01, 0x05 ];
+        let data: Vec<u8> = vec![0x01, 0x05];
         let mut buf: Bytes = data.into();
         let decoded = KeyValuePair::decode(&mut buf);
-        assert!(matches!(decoded.unwrap_err(), DecodeError::More(_)));  // Framing will be off now
+        assert!(matches!(decoded.unwrap_err(), DecodeError::More(_))); // Framing will be off now
     }
 
     #[test]
@@ -190,28 +197,30 @@ mod tests {
         let mut buf = BytesMut::new();
 
         let mut kvps = KeyValuePairs::new();
-        kvps.set_bytesvalue(1, vec![ 0x01, 0x02, 0x03, 0x04, 0x05 ]);
+        kvps.set_bytesvalue(1, vec![0x01, 0x02, 0x03, 0x04, 0x05]);
         kvps.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x01, // 1 KeyValuePair
-            0x01, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // Key=1, Value=[1,2,3,4,5]
-        ]);
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x01, // 1 KeyValuePair
+                0x01, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // Key=1, Value=[1,2,3,4,5]
+            ]
+        );
         let decoded = KeyValuePairs::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvps);
 
         let mut kvps = KeyValuePairs::new();
         kvps.set_intvalue(0, 0);
         kvps.set_intvalue(100, 100);
-        kvps.set_bytesvalue(1, vec![ 0x01, 0x02, 0x03, 0x04, 0x05 ]);
+        kvps.set_bytesvalue(1, vec![0x01, 0x02, 0x03, 0x04, 0x05]);
         kvps.encode(&mut buf).unwrap();
         let buf_vec = buf.to_vec();
         // Note:  Since KeyValuePairs is a HashMap, the order of KeyValuePairs in
         //        the encoded buffer is not guaranteed, so we can't validate the entire buffer,
         //        just validate the ecncoded length and the KeyValuePair count.
-        assert_eq!(14, buf_vec.len());  // 14 bytes total
-        assert_eq!(3, buf_vec[0]);      // 3 KeyValuePairs
+        assert_eq!(14, buf_vec.len()); // 14 bytes total
+        assert_eq!(3, buf_vec[0]); // 3 KeyValuePairs
         let decoded = KeyValuePairs::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvps);
     }
-
 }

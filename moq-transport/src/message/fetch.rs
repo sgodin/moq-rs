@@ -1,5 +1,7 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace};
-use crate::message::{GroupOrder, FetchType};
+use crate::coding::{
+    Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace,
+};
+use crate::message::{FetchType, GroupOrder};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StandaloneFetch {
@@ -140,7 +142,9 @@ impl Encode for Fetch {
                 if let Some(standalone_fetch) = &self.standalone_fetch {
                     standalone_fetch.encode(w)?;
                 } else {
-                    return Err(EncodeError::MissingField("StandaloneFetch info".to_string()));
+                    return Err(EncodeError::MissingField(
+                        "StandaloneFetch info".to_string(),
+                    ));
                 }
             }
             FetchType::RelativeJoining | FetchType::AbsoluteJoining => {
@@ -197,7 +201,10 @@ mod tests {
             group_order: GroupOrder::Publisher,
             fetch_type: FetchType::RelativeJoining,
             standalone_fetch: None,
-            joining_fetch: Some(JoiningFetch { joining_request_id: 382, joining_start: 3463 }),
+            joining_fetch: Some(JoiningFetch {
+                joining_request_id: 382,
+                joining_start: 3463,
+            }),
             params: kvps.clone(),
         };
         msg.encode(&mut buf).unwrap();
@@ -211,7 +218,10 @@ mod tests {
             group_order: GroupOrder::Publisher,
             fetch_type: FetchType::AbsoluteJoining,
             standalone_fetch: None,
-            joining_fetch: Some(JoiningFetch { joining_request_id: 382, joining_start: 3463 }),
+            joining_fetch: Some(JoiningFetch {
+                joining_request_id: 382,
+                joining_start: 3463,
+            }),
             params: kvps.clone(),
         };
         msg.encode(&mut buf).unwrap();
@@ -250,4 +260,3 @@ mod tests {
         assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 }
-

@@ -32,8 +32,8 @@ impl Decode for FilterType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
@@ -41,32 +41,32 @@ mod tests {
 
         let ft = FilterType::NextGroupStart;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        assert_eq!(buf.to_vec(), vec![0x01]);
         let decoded = FilterType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
 
         let ft = FilterType::LargestObject;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x02 ]);
+        assert_eq!(buf.to_vec(), vec![0x02]);
         let decoded = FilterType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
 
         let ft = FilterType::AbsoluteStart;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x03 ]);
+        assert_eq!(buf.to_vec(), vec![0x03]);
         let decoded = FilterType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
 
         let ft = FilterType::AbsoluteRange;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x04 ]);
+        assert_eq!(buf.to_vec(), vec![0x04]);
         let decoded = FilterType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
     }
 
     #[test]
     fn decode_bad_value() {
-        let data: Vec<u8> = vec![ 0x05 ];  // Invalid filter type
+        let data: Vec<u8> = vec![0x05]; // Invalid filter type
         let mut buf: Bytes = data.into();
         let result = FilterType::decode(&mut buf);
         assert!(matches!(result, Err(DecodeError::InvalidFilterType)));

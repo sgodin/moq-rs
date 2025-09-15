@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::coding::{TrackNamespace, ReasonPhrase};
+use crate::coding::{ReasonPhrase, TrackNamespace};
 use crate::watch::State;
 use crate::{message, serve::ServeError};
 
@@ -22,8 +22,15 @@ pub struct Announced {
 }
 
 impl Announced {
-    pub(super) fn new(session: Subscriber, request_id: u64, namespace: TrackNamespace) -> (Announced, AnnouncedRecv) {
-        let info = AnnounceInfo { request_id, namespace };
+    pub(super) fn new(
+        session: Subscriber,
+        request_id: u64,
+        namespace: TrackNamespace,
+    ) -> (Announced, AnnouncedRecv) {
+        let info = AnnounceInfo {
+            request_id,
+            namespace,
+        };
 
         let (send, recv) = State::default().split();
         let send = Self {

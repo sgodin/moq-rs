@@ -147,8 +147,8 @@ impl Tuple {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
@@ -156,12 +156,16 @@ mod tests {
 
         let t = Tuple::from_utf8_path("test/path/to/resource");
         t.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x04,  // 4 tuple fields
-            0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
-            0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
-            0x02, 0x74, 0x6f, // Field 3: "to"
-            0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65]); // Field 4: "resource"
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x04, // 4 tuple fields
+                0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
+                0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
+                0x02, 0x74, 0x6f, // Field 3: "to"
+                0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65
+            ]
+        ); // Field 4: "resource"
         let decoded = Tuple::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
 
@@ -169,9 +173,13 @@ mod tests {
         let mut t = Tuple::new();
         t.add(TupleField::from_utf8("test"));
         t.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x01,  // 1 tuple field
-            0x04, 0x74, 0x65, 0x73, 0x74 ]); // Field 1: "test"
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x01, // 1 tuple field
+                0x04, 0x74, 0x65, 0x73, 0x74
+            ]
+        ); // Field 1: "test"
         let decoded = Tuple::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
     }
@@ -185,17 +193,23 @@ mod tests {
         };
 
         let encoded = t.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::FieldBoundsExceeded(_)));
+        assert!(matches!(
+            encoded.unwrap_err(),
+            EncodeError::FieldBoundsExceeded(_)
+        ));
     }
 
     #[test]
     fn decode_tuplefield_too_large() {
-        let mut data: Vec<u8> = vec![ 0x00; TupleField::MAX_VALUE_SIZE + 1 ];  // Create a vector with 256 bytes
-        // 4097 encoded as VarInt
+        let mut data: Vec<u8> = vec![0x00; TupleField::MAX_VALUE_SIZE + 1]; // Create a vector with 256 bytes
+                                                                            // 4097 encoded as VarInt
         data[0] = 0x50;
         data[1] = 0x01;
         let mut buf: Bytes = data.into();
         let decoded = TupleField::decode(&mut buf);
-        assert!(matches!(decoded.unwrap_err(), DecodeError::FieldBoundsExceeded(_)));
+        assert!(matches!(
+            decoded.unwrap_err(),
+            DecodeError::FieldBoundsExceeded(_)
+        ));
     }
 }

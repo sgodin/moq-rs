@@ -61,8 +61,8 @@ impl Decode for bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode_u8() {
@@ -70,7 +70,7 @@ mod tests {
 
         let i: u8 = 8;
         i.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x08 ]);
+        assert_eq!(buf.to_vec(), vec![0x08]);
         let decoded = u8::decode(&mut buf).unwrap();
         assert_eq!(decoded, i);
     }
@@ -81,7 +81,7 @@ mod tests {
 
         let i: u16 = 65534;
         i.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0xff, 0xfe ]);
+        assert_eq!(buf.to_vec(), vec![0xff, 0xfe]);
         let decoded = u16::decode(&mut buf).unwrap();
         assert_eq!(decoded, i);
     }
@@ -92,14 +92,14 @@ mod tests {
 
         let b = true;
         b.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        assert_eq!(buf.to_vec(), vec![0x01]);
         let decoded = bool::decode(&mut buf).unwrap();
         assert_eq!(decoded, b);
     }
 
     #[test]
     fn decode_invalid_bool() {
-        let data: Vec<u8> = vec![ 0x02 ];  // Invalid value for bool
+        let data: Vec<u8> = vec![0x02]; // Invalid value for bool
         let mut buf: Bytes = data.into();
         let decoded = bool::decode(&mut buf);
         assert!(matches!(decoded.unwrap_err(), DecodeError::InvalidValue));

@@ -29,9 +29,7 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = SubscribeNamespaceOk {
-            id: 12345,
-        };
+        let msg = SubscribeNamespaceOk { id: 12345 };
         msg.encode(&mut buf).unwrap();
         let decoded = SubscribeNamespaceOk::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);

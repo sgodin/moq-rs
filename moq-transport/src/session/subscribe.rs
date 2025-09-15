@@ -54,7 +54,7 @@ impl Subscribe {
             // TODO add prioritization logic on the publisher side
             subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
             group_order: GroupOrder::Publisher, // defer to publisher send order
-            forward: true,  // default to forwarding objects
+            forward: true,            // default to forwarding objects
             filter_type: FilterType::NextGroupStart,
             start_location: None,
             end_group_id: None,
@@ -147,7 +147,6 @@ impl SubscribeRecv {
         Ok(())
     }
 
-
     pub fn subgroup(
         &mut self,
         header: data::SubgroupHeader,
@@ -163,7 +162,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
-            subgroup_id: header.subgroup_id.unwrap(),  // TODO SLG - subgroup_id may not be present
+            subgroup_id: header.subgroup_id.unwrap(), // TODO SLG - subgroup_id may not be present
             priority: header.publisher_priority,
         })?;
 
@@ -176,7 +175,7 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut datagrams = match writer {
-            TrackWriterMode::Track(init) => init.datagrams()?,  // TODO SLG - is this needed?
+            TrackWriterMode::Track(init) => init.datagrams()?, // TODO SLG - is this needed?
             TrackWriterMode::Datagrams(datagrams) => datagrams,
             _ => return Err(ServeError::Mode),
         };
@@ -184,9 +183,9 @@ impl SubscribeRecv {
         // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
-            object_id: datagram.object_id.unwrap(),  // TODO SLG - make safe
+            object_id: datagram.object_id.unwrap(), // TODO SLG - make safe
             priority: datagram.publisher_priority,
-            payload: datagram.payload.unwrap(),  // TODO SLG - datagram.payload is an Option
+            payload: datagram.payload.unwrap(), // TODO SLG - datagram.payload is an Option
         })?;
 
         Ok(())

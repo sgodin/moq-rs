@@ -1,30 +1,30 @@
-use std::fmt;
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
-use crate::data::{SubgroupHeader, FetchHeader};
+use crate::data::{FetchHeader, SubgroupHeader};
+use std::fmt;
 
 /// Stream Header Types
 #[repr(u64)]
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum StreamHeaderType {
-    SubgroupZeroId                = 0x10,
-    SubgroupZeroIdExt             = 0x11,
-    SubgroupOjbectId              = 0x12,
-    SubgroupOjbectIdExt           = 0x13,
-    SubgroupId                    = 0x14,
-    SubgroupIdExt                 = 0x15,
-    SubgroupZeroIdEndOfGroup      = 0x18,
-    SubgroupZeroIdExtEndOfGroup   = 0x19,
-    SubgroupObjectIdEndOfGroup    = 0x1a,
+    SubgroupZeroId = 0x10,
+    SubgroupZeroIdExt = 0x11,
+    SubgroupOjbectId = 0x12,
+    SubgroupOjbectIdExt = 0x13,
+    SubgroupId = 0x14,
+    SubgroupIdExt = 0x15,
+    SubgroupZeroIdEndOfGroup = 0x18,
+    SubgroupZeroIdExtEndOfGroup = 0x19,
+    SubgroupObjectIdEndOfGroup = 0x1a,
     SubgroupOjbectIdExtEndOfGroup = 0x1b,
-    SubgroupIdEndOfGroup          = 0x1c,
-    SubgroupIdExtEndOfGroup       = 0x1d,
-    Fetch                         = 0x5,
+    SubgroupIdEndOfGroup = 0x1c,
+    SubgroupIdExtEndOfGroup = 0x1d,
+    Fetch = 0x5,
 }
 
 impl StreamHeaderType {
     pub fn is_subgroup(&self) -> bool {
         let header_type = *self as u64;
-       (0x10..=0x1d).contains(&header_type)
+        (0x10..=0x1d).contains(&header_type)
     }
 
     pub fn is_fetch(&self) -> bool {
@@ -32,22 +32,26 @@ impl StreamHeaderType {
     }
 
     pub fn has_extension_headers(&self) -> bool {
-        matches!(*self,
-            StreamHeaderType::SubgroupZeroIdExt |
-            StreamHeaderType::SubgroupOjbectIdExt |
-            StreamHeaderType::SubgroupIdExt |
-            StreamHeaderType::SubgroupZeroIdExtEndOfGroup |
-            StreamHeaderType::SubgroupOjbectIdExtEndOfGroup |
-            StreamHeaderType::SubgroupIdExtEndOfGroup |
-            StreamHeaderType::Fetch)
+        matches!(
+            *self,
+            StreamHeaderType::SubgroupZeroIdExt
+                | StreamHeaderType::SubgroupOjbectIdExt
+                | StreamHeaderType::SubgroupIdExt
+                | StreamHeaderType::SubgroupZeroIdExtEndOfGroup
+                | StreamHeaderType::SubgroupOjbectIdExtEndOfGroup
+                | StreamHeaderType::SubgroupIdExtEndOfGroup
+                | StreamHeaderType::Fetch
+        )
     }
 
     pub fn has_subgroup_id(&self) -> bool {
-        matches!(*self,
-            StreamHeaderType::SubgroupId |
-            StreamHeaderType::SubgroupIdExt |
-            StreamHeaderType::SubgroupIdEndOfGroup |
-            StreamHeaderType::SubgroupIdExtEndOfGroup)
+        matches!(
+            *self,
+            StreamHeaderType::SubgroupId
+                | StreamHeaderType::SubgroupIdExt
+                | StreamHeaderType::SubgroupIdEndOfGroup
+                | StreamHeaderType::SubgroupIdExtEndOfGroup
+        )
     }
 }
 
@@ -91,7 +95,6 @@ impl fmt::Display for StreamHeaderType {
         write!(f, "{:?} ({:#x})", self, *self as u64)
     }
 }
-
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StreamHeader {
@@ -151,8 +154,8 @@ impl Encode for StreamHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode_stream_header_type() {
@@ -160,7 +163,7 @@ mod tests {
 
         let ht = StreamHeaderType::Fetch;
         ht.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x05 ]);
+        assert_eq!(buf.to_vec(), vec![0x05]);
         let decoded = StreamHeaderType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ht);
         assert!(ht.is_fetch());
@@ -169,7 +172,7 @@ mod tests {
 
         let ht = StreamHeaderType::SubgroupZeroId;
         ht.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x10 ]);
+        assert_eq!(buf.to_vec(), vec![0x10]);
         let decoded = StreamHeaderType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ht);
         assert!(ht.is_subgroup());
@@ -179,7 +182,7 @@ mod tests {
 
     #[test]
     fn decode_bad_stream_header_type() {
-        let data: Vec<u8> = vec![ 0x00 ];  // Invalid filter type
+        let data: Vec<u8> = vec![0x00]; // Invalid filter type
         let mut buf: Bytes = data.into();
         let result = StreamHeaderType::decode(&mut buf);
         assert!(matches!(result, Err(DecodeError::InvalidHeaderType)));
@@ -192,7 +195,10 @@ mod tests {
         let sh = StreamHeader {
             header_type: StreamHeaderType::Fetch,
             subgroup_header: None,
-            fetch_header: Some(FetchHeader { header_type: StreamHeaderType::Fetch, request_id: 10 }),
+            fetch_header: Some(FetchHeader {
+                header_type: StreamHeaderType::Fetch,
+                request_id: 10,
+            }),
         };
         sh.encode(&mut buf).unwrap();
         let decoded = StreamHeader::decode(&mut buf).unwrap();
@@ -203,8 +209,14 @@ mod tests {
 
         let sh = StreamHeader {
             header_type: StreamHeaderType::SubgroupId,
-            subgroup_header: Some(SubgroupHeader { header_type: StreamHeaderType::SubgroupId, track_alias: 10, group_id: 0, subgroup_id: Some(1), publisher_priority: 100 }),
-            fetch_header: None
+            subgroup_header: Some(SubgroupHeader {
+                header_type: StreamHeaderType::SubgroupId,
+                track_alias: 10,
+                group_id: 0,
+                subgroup_id: Some(1),
+                publisher_priority: 100,
+            }),
+            fetch_header: None,
         };
         sh.encode(&mut buf).unwrap();
         let decoded = StreamHeader::decode(&mut buf).unwrap();
@@ -212,5 +224,5 @@ mod tests {
         assert!(sh.header_type.is_subgroup());
         assert!(!sh.header_type.is_fetch());
         assert!(sh.header_type.has_subgroup_id());
-}
+    }
 }

@@ -47,7 +47,11 @@ pub struct Announce {
 }
 
 impl Announce {
-    pub(super) fn new(mut publisher: Publisher, request_id: u64, namespace: TrackNamespace) -> (Announce, AnnounceRecv) {
+    pub(super) fn new(
+        mut publisher: Publisher,
+        request_id: u64,
+        namespace: TrackNamespace,
+    ) -> (Announce, AnnounceRecv) {
         let info = AnnounceInfo {
             request_id,
             namespace: namespace.clone(),
@@ -66,7 +70,10 @@ impl Announce {
             info,
             state: send,
         };
-        let recv = AnnounceRecv { state: recv, request_id };
+        let recv = AnnounceRecv {
+            state: recv,
+            request_id,
+        };
 
         (send, recv)
     }
@@ -169,7 +176,7 @@ impl ops::Deref for Announce {
 
 pub(super) struct AnnounceRecv {
     state: State<AnnounceState>,
-    pub request_id: u64,  // TODO SLG - Announcements need to be looked up by both request_id and namespace, consider 2 hashmaps in publisher instead of this
+    pub request_id: u64, // TODO SLG - Announcements need to be looked up by both request_id and namespace, consider 2 hashmaps in publisher instead of this
 }
 
 impl AnnounceRecv {

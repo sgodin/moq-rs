@@ -1,4 +1,4 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, TrackNamespace, ReasonPhrase};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, ReasonPhrase, TrackNamespace};
 
 /// Sent by the subscriber to terminate an Announce after PUBLISH_NAMESPACE_OK
 #[derive(Clone, Debug, Eq, PartialEq)]

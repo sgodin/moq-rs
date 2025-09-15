@@ -1,6 +1,6 @@
-use std::fmt;
 use super::{Decode, DecodeError, Encode, EncodeError, TupleField};
 use core::hash::{Hash, Hasher};
+use std::fmt;
 
 /// TrackNamespace
 #[derive(Clone, Default, Eq, PartialEq)]
@@ -51,7 +51,9 @@ impl Decode for TrackNamespace {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let count = usize::decode(r)?;
         if count > Self::MAX_FIELDS {
-            return Err(DecodeError::FieldBoundsExceeded("TrackNamespace tuples".to_string()));
+            return Err(DecodeError::FieldBoundsExceeded(
+                "TrackNamespace tuples".to_string(),
+            ));
         }
 
         let mut fields = Vec::new();
@@ -65,7 +67,9 @@ impl Decode for TrackNamespace {
 impl Encode for TrackNamespace {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         if self.fields.len() > Self::MAX_FIELDS {
-            return Err(EncodeError::FieldBoundsExceeded("TrackNamespace tuples".to_string()));
+            return Err(EncodeError::FieldBoundsExceeded(
+                "TrackNamespace tuples".to_string(),
+            ));
         }
         self.fields.len().encode(w)?;
         for field in &self.fields {
@@ -91,8 +95,8 @@ impl fmt::Display for TrackNamespace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
@@ -100,12 +104,16 @@ mod tests {
 
         let t = TrackNamespace::from_utf8_path("test/path/to/resource");
         t.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x04,  // 4 tuple fields
-            0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
-            0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
-            0x02, 0x74, 0x6f, // Field 3: "to"
-            0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65]); // Field 4: "resource"
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x04, // 4 tuple fields
+                0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
+                0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
+                0x02, 0x74, 0x6f, // Field 3: "to"
+                0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65
+            ]
+        ); // Field 4: "resource"
         let decoded = TrackNamespace::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
 
@@ -113,9 +121,13 @@ mod tests {
         let mut t = TrackNamespace::new();
         t.add(TupleField::from_utf8("test"));
         t.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x01,  // 1 tuple field
-            0x04, 0x74, 0x65, 0x73, 0x74 ]); // Field 1: "test"
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x01, // 1 tuple field
+                0x04, 0x74, 0x65, 0x73, 0x74
+            ]
+        ); // Field 1: "test"
         let decoded = TrackNamespace::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
     }
@@ -130,15 +142,21 @@ mod tests {
         }
 
         let encoded = t.encode(&mut buf);
-        assert!(matches!(encoded.unwrap_err(), EncodeError::FieldBoundsExceeded(_)));
+        assert!(matches!(
+            encoded.unwrap_err(),
+            EncodeError::FieldBoundsExceeded(_)
+        ));
     }
 
     #[test]
     fn decode_too_large() {
-        let mut data: Vec<u8> = vec![ 0x00; 256 ];  // Create a vector with 256 bytes
+        let mut data: Vec<u8> = vec![0x00; 256]; // Create a vector with 256 bytes
         data[0] = (TrackNamespace::MAX_FIELDS + 1) as u8; // Set first byte (count) to 33 as a VarInt
         let mut buf: Bytes = data.into();
         let decoded = TrackNamespace::decode(&mut buf);
-        assert!(matches!(decoded.unwrap_err(), DecodeError::FieldBoundsExceeded(_)));
+        assert!(matches!(
+            decoded.unwrap_err(),
+            DecodeError::FieldBoundsExceeded(_)
+        ));
     }
 }

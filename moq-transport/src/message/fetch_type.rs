@@ -30,8 +30,8 @@ impl Decode for FetchType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
@@ -39,27 +39,26 @@ mod tests {
 
         let ft = FetchType::Standalone;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        assert_eq!(buf.to_vec(), vec![0x01]);
         let decoded = FetchType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
 
         let ft = FetchType::RelativeJoining;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x02 ]);
+        assert_eq!(buf.to_vec(), vec![0x02]);
         let decoded = FetchType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
 
         let ft = FetchType::AbsoluteJoining;
         ft.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x03 ]);
+        assert_eq!(buf.to_vec(), vec![0x03]);
         let decoded = FetchType::decode(&mut buf).unwrap();
         assert_eq!(decoded, ft);
     }
 
-
     #[test]
     fn decode_bad_value() {
-        let data: Vec<u8> = vec![ 0x04 ];  // Invalid fetch type
+        let data: Vec<u8> = vec![0x04]; // Invalid fetch type
         let mut buf: Bytes = data.into();
         let result = FetchType::decode(&mut buf);
         assert!(matches!(result, Err(DecodeError::InvalidFetchType)));

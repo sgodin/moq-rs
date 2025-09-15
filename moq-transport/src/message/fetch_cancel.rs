@@ -31,9 +31,7 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = FetchCancel {
-            id: 12345,
-        };
+        let msg = FetchCancel { id: 12345 };
         msg.encode(&mut buf).unwrap();
         let decoded = FetchCancel::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);

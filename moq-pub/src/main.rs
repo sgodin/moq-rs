@@ -51,7 +51,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let (writer, _, reader) = serve::Tracks::new(TrackNamespace::from_utf8_path(&cli.name)).produce();
+    let (writer, _, reader) =
+        serve::Tracks::new(TrackNamespace::from_utf8_path(&cli.name)).produce();
     let media = Media::new(writer)?;
 
     let tls = cli.tls.load()?;

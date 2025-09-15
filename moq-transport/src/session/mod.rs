@@ -37,7 +37,7 @@ pub struct Session {
     sender: Writer, // Control Stream Sender
     recver: Reader, // Control Stream Receiver
 
-    publisher: Option<Publisher>,   // Contains Publisher side logic, uses outgoing message queue to send control messages
+    publisher: Option<Publisher>, // Contains Publisher side logic, uses outgoing message queue to send control messages
     subscriber: Option<Subscriber>, // Contains Subscriber side logic, uses outgoing message queue to send control messages
 
     /// Queue used by Publisher and Subscriber for sending Control Messages
@@ -49,8 +49,8 @@ impl Session {
     fn largest_common<T: Ord + Clone + Eq>(a: &[T], b: &[T]) -> Option<T> {
         a.iter()
             .filter(|x| b.contains(x)) // keep only items also in b
-            .cloned()                  // clone because we return T, not &T
-            .max()                     // take the largest
+            .cloned() // clone because we return T, not &T
+            .max() // take the largest
     }
 
     fn new(
@@ -61,7 +61,11 @@ impl Session {
     ) -> (Self, Option<Publisher>, Option<Subscriber>) {
         let next_requestid = Arc::new(atomic::AtomicU64::new(first_requestid));
         let outgoing = Queue::default().split();
-        let publisher = Some(Publisher::new(outgoing.0.clone(), webtransport.clone(), next_requestid.clone()));
+        let publisher = Some(Publisher::new(
+            outgoing.0.clone(),
+            webtransport.clone(),
+            next_requestid.clone(),
+        ));
         let subscriber = Some(Subscriber::new(outgoing.0, next_requestid));
 
         let session = Self {
@@ -85,9 +89,7 @@ impl Session {
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
-        let versions: setup::Versions = [
-            setup::Version::DRAFT_14,
-        ].into();
+        let versions: setup::Versions = [setup::Version::DRAFT_14].into();
 
         let client = setup::Client {
             versions: versions.clone(),
@@ -117,11 +119,11 @@ impl Session {
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
 
-        let server_versions = setup::Versions(vec![
-            setup::Version::DRAFT_14,
-        ]);
+        let server_versions = setup::Versions(vec![setup::Version::DRAFT_14]);
 
-        if let Some(largest_common_version) = Self::largest_common(&server_versions, &client.versions) {
+        if let Some(largest_common_version) =
+            Self::largest_common(&server_versions, &client.versions)
+        {
             let server = setup::Server {
                 version: largest_common_version,
                 params: Default::default(),
@@ -133,10 +135,7 @@ impl Session {
             // We are the server, so the first request id is 1
             Ok(Session::new(session, sender, recver, 1))
         } else {
-            Err(SessionError::Version(
-                client.versions,
-                server_versions,
-            ))
+            Err(SessionError::Version(client.versions, server_versions))
         }
     }
 

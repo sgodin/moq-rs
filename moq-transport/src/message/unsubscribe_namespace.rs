@@ -10,7 +10,9 @@ pub struct UnsubscribeNamespace {
 impl Decode for UnsubscribeNamespace {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let track_namespace_prefix = TrackNamespace::decode(r)?;
-        Ok(Self { track_namespace_prefix })
+        Ok(Self {
+            track_namespace_prefix,
+        })
     }
 }
 

@@ -30,8 +30,8 @@ impl Decode for GroupOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
@@ -39,27 +39,26 @@ mod tests {
 
         let go = GroupOrder::Publisher;
         go.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x00 ]);
+        assert_eq!(buf.to_vec(), vec![0x00]);
         let decoded = GroupOrder::decode(&mut buf).unwrap();
         assert_eq!(decoded, go);
 
         let go = GroupOrder::Ascending;
         go.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x01 ]);
+        assert_eq!(buf.to_vec(), vec![0x01]);
         let decoded = GroupOrder::decode(&mut buf).unwrap();
         assert_eq!(decoded, go);
 
         let go = GroupOrder::Descending;
         go.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![ 0x02 ]);
+        assert_eq!(buf.to_vec(), vec![0x02]);
         let decoded = GroupOrder::decode(&mut buf).unwrap();
         assert_eq!(decoded, go);
     }
 
-
     #[test]
     fn decode_bad_value() {
-        let data: Vec<u8> = vec![ 0x03 ];  // Invalid filter type
+        let data: Vec<u8> = vec![0x03]; // Invalid filter type
         let mut buf: Bytes = data.into();
         let result = GroupOrder::decode(&mut buf);
         assert!(matches!(result, Err(DecodeError::InvalidGroupOrder)));

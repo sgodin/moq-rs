@@ -22,7 +22,6 @@ impl Encode for PublishNamespaceDone {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -40,5 +39,3 @@ mod tests {
         assert_eq!(decoded, msg);
     }
 }
-
-

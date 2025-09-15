@@ -101,7 +101,7 @@ impl Subscribed {
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
             track_alias: 0,
-            expires: 3600, // TODO SLG
+            expires: 3600,                                // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
             content_exists: latest.is_some(),
             largest_location: latest,
@@ -167,7 +167,7 @@ impl Drop for Subscribed {
             self.publisher.send_message(message::PublishDone {
                 id: self.msg.id,
                 status_code: err.code(),
-                stream_count: 0,  // TODO SLG
+                stream_count: 0, // TODO SLG
                 reason: ReasonPhrase(err.to_string()),
             });
         } else {
@@ -241,7 +241,8 @@ impl Subscribed {
             let subgroup_object = data::SubgroupObject {
                 object_id_delta: subgroup_object_reader.object_id,
                 payload_length: subgroup_object_reader.size,
-                status: if subgroup_object_reader.size == 0 {  // Only set status if payload length is zero
+                status: if subgroup_object_reader.size == 0 {
+                    // Only set status if payload length is zero
                     Some(subgroup_object_reader.status)
                 } else {
                     None
@@ -253,7 +254,10 @@ impl Subscribed {
             state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_largest_location(subgroup_reader.group_id, subgroup_object_reader.object_id)?;
+                .update_largest_location(
+                    subgroup_reader.group_id,
+                    subgroup_object_reader.object_id,
+                )?;
 
             log::trace!("sent subgroup object: {:?}", subgroup_object);
 
@@ -275,7 +279,7 @@ impl Subscribed {
     ) -> Result<(), SessionError> {
         while let Some(datagram) = datagrams.read().await? {
             let datagram = data::Datagram {
-                datagram_type: data::DatagramType::ObjectIdPayload,  // TODO SLG
+                datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
                 track_alias: self.msg.id, //  TODO SLG - use subscription id for now
                 group_id: datagram.group_id,
                 object_id: Some(datagram.object_id),
@@ -285,7 +289,8 @@ impl Subscribed {
                 payload: Some(datagram.payload),
             };
 
-            let mut buffer = bytes::BytesMut::with_capacity(datagram.payload.as_ref().unwrap().len() + 100);
+            let mut buffer =
+                bytes::BytesMut::with_capacity(datagram.payload.as_ref().unwrap().len() + 100);
             datagram.encode(&mut buffer)?;
 
             self.publisher.send_datagram(buffer.into()).await?;
@@ -294,7 +299,8 @@ impl Subscribed {
             self.state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_largest_location(datagram.group_id, datagram.object_id.unwrap())?;  // TODO SLG - fix up safety of unwrap()
+                .update_largest_location(datagram.group_id, datagram.object_id.unwrap())?;
+            // TODO SLG - fix up safety of unwrap()
         }
 
         Ok(())

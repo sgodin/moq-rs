@@ -46,7 +46,11 @@ pub struct Publisher {
 }
 
 impl Publisher {
-    pub(crate) fn new(outgoing: Queue<Message>, webtransport: web_transport::Session, next_requestid: Arc<atomic::AtomicU64>) -> Self {
+    pub(crate) fn new(
+        outgoing: Queue<Message>,
+        webtransport: web_transport::Session,
+        next_requestid: Arc<atomic::AtomicU64>,
+    ) -> Self {
         Self {
             webtransport,
             announces: Default::default(),
@@ -67,8 +71,7 @@ impl Publisher {
     pub async fn connect(
         session: web_transport::Session,
     ) -> Result<(Session, Publisher), SessionError> {
-        let (session, publisher, _) =
-            Session::connect(session).await?;
+        let (session, publisher, _) = Session::connect(session).await?;
         Ok((session, publisher))
     }
 
@@ -90,7 +93,8 @@ impl Publisher {
                 // Get the current next request id to use and increment the value for by 2 for the next request
                 let request_id = self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed);
 
-                let (send, recv) = Announce::new(self.clone(), request_id, tracks.namespace.clone());
+                let (send, recv) =
+                    Announce::new(self.clone(), request_id, tracks.namespace.clone());
                 entry.insert(recv);
                 send
             }
@@ -167,7 +171,7 @@ impl Publisher {
             response = message::TrackStatusOk {
                 id: track_status_request.request_msg.id,
                 track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 3600, // TODO SLG
+                expires: 3600,  // TODO SLG
                 group_order: GroupOrder::Ascending, // TODO SLG
                 content_exists: true,
                 largest_location: Some(latest),
@@ -177,7 +181,7 @@ impl Publisher {
             response = message::TrackStatusOk {
                 id: track_status_request.request_msg.id,
                 track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 3600, // TODO SLG
+                expires: 3600,  // TODO SLG
                 group_order: GroupOrder::Ascending, // TODO SLG
                 content_exists: false,
                 largest_location: None,
@@ -202,16 +206,20 @@ impl Publisher {
             message::Subscriber::Subscribe(msg) => self.recv_subscribe(msg),
             message::Subscriber::SubscribeUpdate(msg) => self.recv_subscribe_update(msg),
             message::Subscriber::Unsubscribe(msg) => self.recv_unsubscribe(msg),
-            message::Subscriber::Fetch(_msg) => todo!(),  // TODO
-            message::Subscriber::FetchCancel(_msg) => todo!(),  // TODO
+            message::Subscriber::Fetch(_msg) => todo!(), // TODO
+            message::Subscriber::FetchCancel(_msg) => todo!(), // TODO
             message::Subscriber::TrackStatus(msg) => self.recv_track_status(msg),
             message::Subscriber::SubscribeNamespace(_msg) => todo!(), // TODO
             message::Subscriber::UnsubscribeNamespace(_msg) => todo!(), // TODO
-            message::Subscriber::PublishNamespaceCancel(msg) => self.recv_publish_namespace_cancel(msg),
+            message::Subscriber::PublishNamespaceCancel(msg) => {
+                self.recv_publish_namespace_cancel(msg)
+            }
             message::Subscriber::PublishNamespaceOk(msg) => self.recv_publish_namespace_ok(msg),
-            message::Subscriber::PublishNamespaceError(msg) => self.recv_publish_namespace_error(msg),
+            message::Subscriber::PublishNamespaceError(msg) => {
+                self.recv_publish_namespace_error(msg)
+            }
             message::Subscriber::PublishOk(_msg) => todo!(), // TODO
-            message::Subscriber::PublishError(_msg) => todo!(),  // TODO
+            message::Subscriber::PublishError(_msg) => todo!(), // TODO
         };
 
         if let Err(err) = res {
@@ -221,14 +229,15 @@ impl Publisher {
         Ok(())
     }
 
-    fn recv_publish_namespace_ok(&mut self, msg: message::PublishNamespaceOk) -> Result<(), SessionError> {
+    fn recv_publish_namespace_ok(
+        &mut self,
+        msg: message::PublishNamespaceOk,
+    ) -> Result<(), SessionError> {
         // We need to find the announce request using the request id, however the self.announces data structure
         // is a HashMap indexed by Namespace (which is needed for handling PUBLISH_NAMESPACE_CANCEL).  TODO - make more efficient.
         // For now iterate through all self.annouces until we find the matching id.
         let mut announces = self.announces.lock().unwrap();
-        let announce = announces
-            .iter_mut()
-            .find(|(_k, v)| v.request_id == msg.id);
+        let announce = announces.iter_mut().find(|(_k, v)| v.request_id == msg.id);
 
         if let Some(announce) = announce {
             announce.1.recv_ok()?;
@@ -237,7 +246,10 @@ impl Publisher {
         Ok(())
     }
 
-    fn recv_publish_namespace_error(&mut self, msg: message::PublishNamespaceError) -> Result<(), SessionError> {
+    fn recv_publish_namespace_error(
+        &mut self,
+        msg: message::PublishNamespaceError,
+    ) -> Result<(), SessionError> {
         // We need to find the announce request using the request id, however the self.announces data structure
         // is a HashMap indexed by Namespace (which is needed for handling PUBLISH_NAMESPACE_CANCEL).  TODO - make more efficient.
         // For now iterate through all self.annouces until we find the matching id.
@@ -260,7 +272,10 @@ impl Publisher {
         Ok(())
     }
 
-    fn recv_publish_namespace_cancel(&mut self, msg: message::PublishNamespaceCancel) -> Result<(), SessionError> {
+    fn recv_publish_namespace_cancel(
+        &mut self,
+        msg: message::PublishNamespaceCancel,
+    ) -> Result<(), SessionError> {
         // TODO: If a publisher receives new subscriptions for that namespace after receiving an ANNOUNCE_CANCEL,
         // it SHOULD close the session as a 'Protocol Violation'.
         if let Some(announce) = self.announces.lock().unwrap().remove(&msg.track_namespace) {
@@ -311,10 +326,7 @@ impl Publisher {
         Err(SessionError::Internal)
     }
 
-    fn recv_track_status(
-        &mut self,
-        msg: message::TrackStatus,
-    ) -> Result<(), SessionError> {
+    fn recv_track_status(&mut self, msg: message::TrackStatus) -> Result<(), SessionError> {
         let namespace = msg.track_namespace.clone();
 
         let mut announces = self.announces.lock().unwrap();
@@ -342,7 +354,9 @@ impl Publisher {
         match &msg {
             message::Publisher::PublishDone(msg) => self.drop_subscribe(msg.id),
             message::Publisher::SubscribeError(msg) => self.drop_subscribe(msg.id),
-            message::Publisher::PublishNamespaceDone(msg) => self.drop_publish_namespace(&msg.track_namespace),
+            message::Publisher::PublishNamespaceDone(msg) => {
+                self.drop_publish_namespace(&msg.track_namespace)
+            }
             _ => (),
         };
 

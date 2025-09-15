@@ -1,4 +1,6 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace};
+use crate::coding::{
+    Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location, TrackNamespace,
+};
 use crate::message::GroupOrder;
 
 /// Sent by publisher to initiate a subscription to a track.
@@ -9,7 +11,7 @@ pub struct Publish {
 
     /// Track properties
     pub track_namespace: TrackNamespace,
-    pub track_name: String,  // TODO SLG - consider making a FullTrackName base struct (total size limit of 4096)
+    pub track_name: String, // TODO SLG - consider making a FullTrackName base struct (total size limit of 4096)
     pub track_alias: u64,
 
     pub group_order: GroupOrder,
@@ -109,7 +111,7 @@ mod tests {
             track_alias: 212,
             group_order: GroupOrder::Ascending,
             content_exists: true,
-            largest_location: Some(Location::new(2,3)),
+            largest_location: Some(Location::new(2, 3)),
             forward: true,
             params: kvps.clone(),
         };
@@ -132,7 +134,7 @@ mod tests {
         msg.encode(&mut buf).unwrap();
         let decoded = Publish::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);
-}
+    }
 
     #[test]
     fn encode_missing_fields() {
@@ -172,4 +174,3 @@ mod tests {
         assert!(matches!(encoded.unwrap_err(), EncodeError::InvalidValue));
     }
 }
-

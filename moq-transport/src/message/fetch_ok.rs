@@ -79,7 +79,7 @@ mod tests {
             id: 12345,
             group_order: GroupOrder::Descending,
             end_of_track: true,
-            end_location: Location::new(2,3),
+            end_location: Location::new(2, 3),
             params: kvps.clone(),
         };
         msg.encode(&mut buf).unwrap();
@@ -95,7 +95,7 @@ mod tests {
             id: 12345,
             group_order: GroupOrder::Publisher,
             end_of_track: true,
-            end_location: Location::new(2,3),
+            end_location: Location::new(2, 3),
             params: Default::default(),
         };
         let encoded = msg.encode(&mut buf);

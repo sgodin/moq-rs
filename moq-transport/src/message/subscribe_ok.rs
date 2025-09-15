@@ -34,7 +34,7 @@ impl Decode for SubscribeOk {
         let content_exists = bool::decode(r)?;
         let largest_location = match content_exists {
             true => Some(Location::decode(r)?),
-            false => None
+            false => None,
         };
         let params = KeyValuePairs::decode(r)?;
 
@@ -89,7 +89,7 @@ mod tests {
             expires: 3600,
             group_order: GroupOrder::Publisher,
             content_exists: true,
-            largest_location: Some(Location::new(2,3)),
+            largest_location: Some(Location::new(2, 3)),
             params: kvps.clone(),
         };
         msg.encode(&mut buf).unwrap();
@@ -114,4 +114,3 @@ mod tests {
         assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 }
-

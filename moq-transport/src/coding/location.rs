@@ -1,6 +1,5 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 
-
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Location {
     pub group_id: u64,
@@ -9,7 +8,10 @@ pub struct Location {
 
 impl Location {
     pub fn new(group_id: u64, object_id: u64) -> Self {
-        Self { group_id, object_id }
+        Self {
+            group_id,
+            object_id,
+        }
     }
 }
 
@@ -40,9 +42,13 @@ mod tests {
 
         let loc = Location::new(12345, 67890);
         loc.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![
-            0x70, 0x39,  // 12345 encoded as VarInt
-            0x80, 0x01, 0x09, 0x32 ]); // 67890 encoded as VarInt
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0x70, 0x39, // 12345 encoded as VarInt
+                0x80, 0x01, 0x09, 0x32
+            ]
+        ); // 67890 encoded as VarInt
         let decoded = Location::decode(&mut buf).unwrap();
         assert_eq!(decoded, loc);
     }
@@ -65,4 +71,3 @@ mod tests {
         assert!(loc5 >= loc6);
     }
 }
-

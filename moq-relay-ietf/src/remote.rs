@@ -120,7 +120,10 @@ impl RemotesConsumer {
         Self { info, state }
     }
 
-    pub async fn route(&self, namespace: &TrackNamespace) -> anyhow::Result<Option<RemoteConsumer>> {
+    pub async fn route(
+        &self,
+        namespace: &TrackNamespace,
+    ) -> anyhow::Result<Option<RemoteConsumer>> {
         // Always fetch the origin instead of using the (potentially invalid) cache.
         let origin = match self.api.get_origin(&namespace.to_utf8_path()).await? {
             None => return Ok(None),

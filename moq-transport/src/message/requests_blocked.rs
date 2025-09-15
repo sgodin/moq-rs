@@ -32,7 +32,9 @@ mod tests {
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
-        let msg = RequestsBlocked { max_request_id: 12345 };
+        let msg = RequestsBlocked {
+            max_request_id: 12345,
+        };
         msg.encode(&mut buf).unwrap();
         let decoded = RequestsBlocked::decode(&mut buf).unwrap();
         assert_eq!(decoded, msg);

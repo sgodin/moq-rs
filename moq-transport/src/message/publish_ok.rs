@@ -217,4 +217,3 @@ mod tests {
         assert!(matches!(encoded.unwrap_err(), EncodeError::MissingField(_)));
     }
 }
-
