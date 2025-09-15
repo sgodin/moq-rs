@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/englishm/moq-rs/compare/moq-transport-v0.10.0...moq-transport-v0.11.0) - 2025-09-15
+
+### Other
+
+- cargo fmt
+- Appease lints
+- Cleanup linter warnings
+- Implement proper stream header parsing for draft-14
+- - only support draft 14 in setup negotiations
+- Target only draft-14 support
+- Migrate messaging to draft-14
+- Migrate data messaging to draft-13
+- small change to get clock sample programming working again
+- Complete Updating all Control Messaging to Draft-13
+- Start updating control messaging to draft-13 level
+- Cleanup of Base coding structures
+- Start migrating MOQ messaging to draft-13 messaging
+
 ## [0.10.0](https://github.com/englishm/moq-rs/compare/moq-transport-v0.9.0...moq-transport-v0.10.0) - 2025-02-24
 
 ### Fixed
