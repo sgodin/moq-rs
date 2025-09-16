@@ -319,7 +319,7 @@ mod tests {
         let i = 0;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0x00]); // first 2 bits are 00
+        assert_eq!(buf.to_vec(), vec![0b0000_0000]); // first 2 bits are 00
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -328,7 +328,7 @@ mod tests {
         let i = 63;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0x3f]); // first 2 bits are 00
+        assert_eq!(buf.to_vec(), vec![0b0011_1111]); // first 2 bits are 00
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -337,7 +337,7 @@ mod tests {
         let i = 64;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0x40, 0x40]); // first 2 bits are 01
+        assert_eq!(buf.to_vec(), vec![0b0100_0000, 0b0100_0000]); // first 2 bits are 01
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -346,7 +346,7 @@ mod tests {
         let i = 16383;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0x7f, 0xff]); // first 2 bits are 01
+        assert_eq!(buf.to_vec(), vec![0b0111_1111, 0xff]); // first 2 bits are 01
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -355,7 +355,7 @@ mod tests {
         let i = 16384;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0x80, 0x00, 0x40, 0x00]); // first 2 bits are 10
+        assert_eq!(buf.to_vec(), vec![0b1000_0000, 0x00, 0x40, 0x00]); // first 2 bits are 10
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -364,7 +364,7 @@ mod tests {
         let i = 1073741823;
         let vi = VarInt(i);
         vi.encode(&mut buf).unwrap();
-        assert_eq!(buf.to_vec(), vec![0xbf, 0xff, 0xff, 0xff]); // first 2 bits are 10
+        assert_eq!(buf.to_vec(), vec![0b1011_1111, 0xff, 0xff, 0xff]); // first 2 bits are 10
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -375,8 +375,9 @@ mod tests {
         vi.encode(&mut buf).unwrap();
         assert_eq!(
             buf.to_vec(),
-            vec![0xc0, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00]
-        ); // first 2 bits are 11
+            // first 2 bits are 11
+            vec![0b1100_0000, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00]
+        );
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
@@ -387,8 +388,9 @@ mod tests {
         vi.encode(&mut buf).unwrap();
         assert_eq!(
             buf.to_vec(),
-            vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
-        ); // first 2 bits are 11
+            // first 2 bits are 11
+            vec![0b1111_1111, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
         let decoded = VarInt::decode(&mut buf).unwrap();
         assert_eq!(decoded, vi);
         assert_eq!(u64::try_from(decoded).unwrap(), i);
