@@ -19,10 +19,16 @@ pub struct Media<O> {
     broadcast: TracksReader,
     tracks_writer: TracksWriter,
     output: Arc<Mutex<O>>,
+    request_catalog: bool,
 }
 
 impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
-    pub async fn new(subscriber: Subscriber, tracks: Tracks, output: O) -> anyhow::Result<Self> {
+    pub async fn new(
+        subscriber: Subscriber,
+        tracks: Tracks,
+        output: O,
+        request_catalog: bool,
+    ) -> anyhow::Result<Self> {
         let (tracks_writer, _tracks_request, tracks_reader) = tracks.produce();
         let broadcast = tracks_reader; // breadcrumb for navigating API name changes
         Ok(Self {
@@ -30,37 +36,29 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
             broadcast,
             tracks_writer,
             output: Arc::new(Mutex::new(output)),
+            request_catalog,
         })
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
+        let catalog = if self.request_catalog {
+            // The catalog track has no standardized name, but
+            // both moq-pub of moq-rs and gst-moq-pub uses ".catalog".
+            let buf = self.download_first_object(".catalog", "catalog").await?;
+            let s = std::str::from_utf8(&buf)?;
+            let c: moq_catalog::Root = serde_json::from_str(s)?;
+            info!("catalog: {c:#?}");
+            anyhow::ensure!(c.version == 1, "Unknown catalog version");
+            Some(c)
+        } else {
+            None
+        };
         let moov = {
-            let init_track_name = "0.mp4";
-            let track = self
-                .tracks_writer
-                .create(init_track_name)
-                .context("failed to create init track")?;
-
-            let mut subscriber = self.subscriber.clone();
-            tokio::task::spawn(async move {
-                subscriber.subscribe(track).await.unwrap_or_else(|err| {
-                    warn!("failed to subscribe to init track: {err:?}");
-                });
-            });
-
-            let track = self
-                .broadcast
-                .subscribe(init_track_name)
-                .context("no init track")?;
-            let mut group = match track.mode().await? {
-                TrackReaderMode::Subgroups(mut groups) => {
-                    groups.next().await?.context("no init group")?
-                }
-                _ => anyhow::bail!("expected init segment"),
+            let init_track_name: &str = match catalog {
+                Some(ref c) => &c.tracks[0].init_track.clone().unwrap(),
+                None => "0.mp4",
             };
-
-            let object = group.next().await?.context("no init fragment")?;
-            let buf = Self::recv_object(object).await?;
+            let buf = self.download_first_object(init_track_name, "init").await?;
             self.output.lock().await.write_all(&buf).await?;
             let mut reader = Cursor::new(&buf);
 
@@ -78,9 +76,12 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
         let mut has_video = false;
         let mut has_audio = false;
         let mut tracks = vec![];
-        for trak in &moov.traks {
+        for (idx, trak) in moov.traks.into_iter().enumerate() {
             let id = trak.tkhd.track_id;
-            let name = format!("{id}.m4s");
+            let name: String = match catalog {
+                Some(ref c) => c.tracks[idx].name.clone(),
+                None => format!("{id}.m4s"),
+            };
             info!("found track {name}");
             let mut active = false;
             if !has_video && trak.mdia.minf.stbl.stsd.avc1.is_some() {
@@ -123,6 +124,42 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
         }
         while tasks.join_next().await.is_some() {}
         Ok(())
+    }
+
+    async fn download_first_object(
+        &mut self,
+        track_name: &str,
+        alias: &'static str,
+    ) -> anyhow::Result<Vec<u8>> {
+        let track = self
+            .tracks_writer
+            .create(track_name)
+            .context(format!("failed to create {alias} track"))?;
+
+        let mut subscriber = self.subscriber.clone();
+        tokio::task::spawn(async move {
+            subscriber.subscribe(track).await.unwrap_or_else(|err| {
+                warn!("failed to subscribe to {alias} track: {err:?}");
+            });
+        });
+
+        let track = self
+            .broadcast
+            .subscribe(track_name)
+            .context(format!("no {alias} track"))?;
+        let mut group = match track.mode().await? {
+            TrackReaderMode::Subgroups(mut groups) => {
+                groups.next().await?.context(format!("no {alias} group"))?
+            }
+            _ => anyhow::bail!("expected {alias} segment"),
+        };
+
+        let object = group
+            .next()
+            .await?
+            .context(format!("no {alias} fragment"))?;
+        let buf = Self::recv_object(object).await?;
+        Ok(buf)
     }
 
     async fn recv_track(track: TrackReader, out: Arc<Mutex<O>>) -> anyhow::Result<()> {
