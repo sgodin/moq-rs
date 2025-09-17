@@ -156,16 +156,21 @@ mod tests {
 
         let t = Tuple::from_utf8_path("test/path/to/resource");
         t.encode(&mut buf).unwrap();
+        #[rustfmt::skip]
         assert_eq!(
             buf.to_vec(),
             vec![
                 0x04, // 4 tuple fields
-                0x04, 0x74, 0x65, 0x73, 0x74, // Field 1: "test"
-                0x04, 0x70, 0x61, 0x74, 0x68, // Field 2: "path"
-                0x02, 0x74, 0x6f, // Field 3: "to"
+                // Field 1: "test"
+                0x04, 0x74, 0x65, 0x73, 0x74,
+                // Field 2: "path"
+                0x04, 0x70, 0x61, 0x74, 0x68,
+                // Field 3: "to"
+                0x02, 0x74, 0x6f,
+                // Field 4: "resource"
                 0x08, 0x72, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65
             ]
-        ); // Field 4: "resource"
+        );
         let decoded = Tuple::decode(&mut buf).unwrap();
         assert_eq!(decoded, t);
 

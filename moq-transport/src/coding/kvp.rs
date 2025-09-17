@@ -60,8 +60,8 @@ impl Encode for KeyValuePair {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         match &self.value {
             Value::IntValue(v) => {
+                // key must be even for IntValue
                 if (self.key % 2) != 0 {
-                    // key must be even for IntValue
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;
@@ -69,8 +69,8 @@ impl Encode for KeyValuePair {
                 Ok(())
             }
             Value::BytesValue(v) => {
+                // key must be odd for BytesValue
                 if (self.key % 2) == 0 {
-                    // key must be odd for BytesValue
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;
