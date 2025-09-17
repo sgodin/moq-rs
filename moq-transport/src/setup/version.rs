@@ -132,15 +132,17 @@ mod tests {
         let versions = Versions(vec![Version(1), Version::DRAFT_12, Version::DRAFT_13]);
 
         versions.encode(&mut buf).unwrap();
+        #[rustfmt::skip]
         assert_eq!(
             buf.to_vec(),
             vec![
                 0x03, // 3 Versions
-                0x01, // Version 1
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
-                0x0C, // Version DRAFT_12 (0xff00000c)
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
-                0x0D, // Version DRAFT_13 (0xff00000d)
+                // Version 1
+                0x01,
+                // Version DRAFT_12 (0xff00000c)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0C,
+                // Version DRAFT_13 (0xff00000d)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D,
             ]
         );
 
