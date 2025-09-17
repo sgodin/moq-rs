@@ -31,14 +31,14 @@ pub enum DecodeError {
     #[error("invalid message: {0:?}")]
     InvalidMessage(u64),
 
-    #[error("invalid role: {0:?}")]
-    InvalidRole(u64),
-
     #[error("invalid subscribe location")]
     InvalidSubscribeLocation,
 
     #[error("invalid filter type")]
     InvalidFilterType,
+
+    #[error("invalid fetch type")]
+    InvalidFetchType,
 
     #[error("invalid group order")]
     InvalidGroupOrder,
@@ -46,11 +46,8 @@ pub enum DecodeError {
     #[error("invalid object status")]
     InvalidObjectStatus,
 
-    #[error("invalid track status code")]
-    InvalidTrackStatusCode,
-
-    #[error("missing field")]
-    MissingField,
+    #[error("invalid header type")]
+    InvalidHeaderType,
 
     #[error("invalid value")]
     InvalidValue,
@@ -70,6 +67,15 @@ pub enum DecodeError {
 
     #[error("io error: {0}")]
     Io(sync::Arc<io::Error>),
+
+    #[error("key-value-pair length exceeded")]
+    KeyValuePairLengthExceeded(),
+
+    #[error("field '{0}' too large")]
+    FieldBoundsExceeded(String),
+
+    #[error("invalid datagram type")]
+    InvalidDatagramType,
 }
 
 impl From<io::Error> for DecodeError {

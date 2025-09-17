@@ -44,14 +44,18 @@ macro_rules! publisher_msgs {
     }
 }
 
+// Defines messages that a PUBLISHER would send, or that a SUBSCRIBER would handle
 publisher_msgs! {
-    Announce,
-    Unannounce,
+    PublishNamespace,
+    PublishNamespaceDone,
+    Publish,
+    PublishDone,
     SubscribeOk,
     SubscribeError,
-    SubscribeDone,
-    MaxSubscribeId,
-    TrackStatus,
+    TrackStatusOk,
+    TrackStatusError,
     FetchOk,
     FetchError,
+    SubscribeNamespaceOk,
+    SubscribeNamespaceError,
 }

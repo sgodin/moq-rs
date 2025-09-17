@@ -5,11 +5,10 @@ use std::{
 };
 
 use crate::{
-    coding::{Decode, Tuple},
+    coding::{Decode, TrackNamespace},
     data,
     message::{self, Message},
     serve::{self, ServeError},
-    setup,
 };
 
 use crate::watch::Queue;
@@ -19,36 +18,42 @@ use super::{Announced, AnnouncedRecv, Reader, Session, SessionError, Subscribe, 
 // TODO remove Clone.
 #[derive(Clone)]
 pub struct Subscriber {
-    announced: Arc<Mutex<HashMap<Tuple, AnnouncedRecv>>>,
+    announced: Arc<Mutex<HashMap<TrackNamespace, AnnouncedRecv>>>,
     announced_queue: Queue<Announced>,
 
     subscribes: Arc<Mutex<HashMap<u64, SubscribeRecv>>>,
-    subscribe_next: Arc<atomic::AtomicU64>,
 
+    /// The queue we will write any outbound control messages we want to sent, the session run_send task
+    /// will process the queue and send the message on the control stream.
     outgoing: Queue<Message>,
+
+    /// When we need a new Request Id for sending a request, we can get it from here.  Note:  The instance
+    /// of AtomicU64 is shared with the Subscriber, so the session uses unique request ids for all requests
+    /// generated.  Note:  If we initiated the QUIC connection then request id's start at 0 and increment by 2
+    /// for each request (even numbers).  If we accepted an inbound QUIC connection then request id's start at 1 and
+    /// increment by 2 for each request (odd numbers).
+    next_requestid: Arc<atomic::AtomicU64>,
 }
 
 impl Subscriber {
-    pub(super) fn new(outgoing: Queue<Message>) -> Self {
+    pub(super) fn new(outgoing: Queue<Message>, next_requestid: Arc<atomic::AtomicU64>) -> Self {
         Self {
             announced: Default::default(),
             announced_queue: Default::default(),
             subscribes: Default::default(),
-            subscribe_next: Default::default(),
             outgoing,
+            next_requestid,
         }
     }
 
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) =
-            Session::accept_role(session, setup::Role::Subscriber).await?;
+        let (session, _, subscriber) = Session::accept(session).await?;
         Ok((session, subscriber.unwrap()))
     }
 
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) =
-            Session::connect_role(session, setup::Role::Subscriber).await?;
-        Ok((session, subscriber.unwrap()))
+        let (session, _, subscriber) = Session::connect(session).await?;
+        Ok((session, subscriber))
     }
 
     pub async fn announced(&mut self) -> Option<Announced> {
@@ -56,10 +61,11 @@ impl Subscriber {
     }
 
     pub async fn subscribe(&mut self, track: serve::TrackWriter) -> Result<(), ServeError> {
-        let id = self.subscribe_next.fetch_add(1, atomic::Ordering::Relaxed);
+        // Get the current next request id to use and increment the value for by 2 for the next request
+        let request_id = self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed);
 
-        let (send, recv) = Subscribe::new(self.clone(), id, track);
-        self.subscribes.lock().unwrap().insert(id, recv);
+        let (send, recv) = Subscribe::new(self.clone(), request_id, track);
+        self.subscribes.lock().unwrap().insert(request_id, recv);
 
         send.closed().await
     }
@@ -69,8 +75,11 @@ impl Subscriber {
 
         // Remove our entry on terminal state.
         match &msg {
-            message::Subscriber::AnnounceCancel(msg) => self.drop_announce(&msg.namespace),
-            message::Subscriber::AnnounceError(msg) => self.drop_announce(&msg.namespace),
+            message::Subscriber::PublishNamespaceCancel(msg) => {
+                self.drop_publish_namespace(&msg.track_namespace)
+            }
+            // TODO SLG - there is no longer a namespace in the error, need to map via request id
+            message::Subscriber::PublishNamespaceError(_msg) => todo!(), //self.drop_announce(&msg.track_namespace),
             _ => {}
         }
 
@@ -80,16 +89,18 @@ impl Subscriber {
 
     pub(super) fn recv_message(&mut self, msg: message::Publisher) -> Result<(), SessionError> {
         let res = match &msg {
-            message::Publisher::Announce(msg) => self.recv_announce(msg),
-            message::Publisher::Unannounce(msg) => self.recv_unannounce(msg),
+            message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
+            message::Publisher::PublishNamespaceDone(msg) => self.recv_publish_namespace_done(msg),
+            message::Publisher::Publish(_msg) => todo!(), // TODO
+            message::Publisher::PublishDone(msg) => self.recv_publish_done(msg),
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
-            message::Publisher::SubscribeDone(msg) => self.recv_subscribe_done(msg),
-            message::Publisher::MaxSubscribeId(msg) => self.recv_max_subscribe_id(msg),
-            message::Publisher::TrackStatus(msg) => self.recv_track_status(msg),
-            // TODO: Implement fetch messages
-            message::Publisher::FetchOk(_msg) => todo!(),
-            message::Publisher::FetchError(_msg) => todo!(),
+            message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
+            message::Publisher::TrackStatusError(_msg) => todo!(), // TODO
+            message::Publisher::FetchOk(_msg) => todo!(),          // TODO
+            message::Publisher::FetchError(_msg) => todo!(),       // TODO
+            message::Publisher::SubscribeNamespaceOk(_msg) => todo!(),
+            message::Publisher::SubscribeNamespaceError(_msg) => todo!(),
         };
 
         if let Err(SessionError::Serve(err)) = res {
@@ -100,15 +111,18 @@ impl Subscriber {
         res
     }
 
-    fn recv_announce(&mut self, msg: &message::Announce) -> Result<(), SessionError> {
+    fn recv_publish_namespace(
+        &mut self,
+        msg: &message::PublishNamespace,
+    ) -> Result<(), SessionError> {
         let mut announces = self.announced.lock().unwrap();
 
-        let entry = match announces.entry(msg.namespace.clone()) {
+        let entry = match announces.entry(msg.track_namespace.clone()) {
             hash_map::Entry::Occupied(_) => return Err(SessionError::Duplicate),
             hash_map::Entry::Vacant(entry) => entry,
         };
 
-        let (announced, recv) = Announced::new(self.clone(), msg.namespace.clone());
+        let (announced, recv) = Announced::new(self.clone(), msg.id, msg.track_namespace.clone());
         if let Err(announced) = self.announced_queue.push(announced) {
             announced.close(ServeError::Cancel)?;
             return Ok(());
@@ -119,8 +133,11 @@ impl Subscriber {
         Ok(())
     }
 
-    fn recv_unannounce(&mut self, msg: &message::Unannounce) -> Result<(), SessionError> {
-        if let Some(announce) = self.announced.lock().unwrap().remove(&msg.namespace) {
+    fn recv_publish_namespace_done(
+        &mut self,
+        msg: &message::PublishNamespaceDone,
+    ) -> Result<(), SessionError> {
+        if let Some(announce) = self.announced.lock().unwrap().remove(&msg.track_namespace) {
             announce.recv_unannounce()?;
         }
 
@@ -137,39 +154,28 @@ impl Subscriber {
 
     fn recv_subscribe_error(&mut self, msg: &message::SubscribeError) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
-            subscribe.error(ServeError::Closed(msg.code))?;
+            subscribe.error(ServeError::Closed(msg.error_code))?;
         }
 
         Ok(())
     }
 
-    fn recv_subscribe_done(&mut self, msg: &message::SubscribeDone) -> Result<(), SessionError> {
+    fn recv_publish_done(&mut self, msg: &message::PublishDone) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
-            subscribe.error(ServeError::Closed(msg.code))?;
+            subscribe.error(ServeError::Closed(msg.status_code))?;
         }
 
         Ok(())
     }
 
-    fn recv_max_subscribe_id(
-        &mut self,
-        _msg: &message::MaxSubscribeId,
-    ) -> Result<(), SessionError> {
-        // TODO: The Maximum Subscribe Id MUST only increase within a session,
-        // and receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller
-        // Subscribe ID value is a 'Protocol Violation'
-        // The session should be accessible here to check the max_subscribe_id
-        Ok(())
-    }
-
-    fn recv_track_status(&mut self, _msg: &message::TrackStatus) -> Result<(), SessionError> {
+    fn recv_track_status_ok(&mut self, _msg: &message::TrackStatusOk) -> Result<(), SessionError> {
         // TODO: Expose this somehow?
-        // TODO: Also add a way to sent a Track Status Request in the first place
+        // TODO: Also add a way to send a Track Status Request in the first place
 
         Ok(())
     }
 
-    fn drop_announce(&mut self, namespace: &Tuple) {
+    fn drop_publish_namespace(&mut self, namespace: &TrackNamespace) {
         self.announced.lock().unwrap().remove(namespace);
     }
 
@@ -178,11 +184,15 @@ impl Subscriber {
         stream: web_transport::RecvStream,
     ) -> Result<(), SessionError> {
         let mut reader = Reader::new(stream);
-        let header: data::Header = reader.decode().await?;
 
-        let id = header.subscribe_id();
+        // Decode the stream header
+        let stream_header: data::StreamHeader = reader.decode().await?;
 
-        let res = self.recv_stream_inner(reader, header).await;
+        // No fetch support yet, so panic if fetch_header for now (via unwrap below)
+        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
+        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
+
+        let res = self.recv_stream_inner(reader, stream_header).await;
         if let Err(SessionError::Serve(err)) = &res {
             // The writer is closed, so we should teriminate.
             // TODO it would be nice to do this immediately when the Writer is closed.
@@ -197,13 +207,15 @@ impl Subscriber {
     async fn recv_stream_inner(
         &mut self,
         reader: Reader,
-        header: data::Header,
+        stream_header: data::StreamHeader,
     ) -> Result<(), SessionError> {
-        let id = header.subscribe_id();
+        // No fetch support yet, so panic if fetch_header for now (via unwrap below)
+        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
+        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
         enum Writer {
-            Track(serve::StreamWriter),
+            //Fetch(serve::FetchWriter),
             Subgroup(serve::SubgroupWriter),
         }
 
@@ -211,77 +223,61 @@ impl Subscriber {
             let mut subscribes = self.subscribes.lock().unwrap();
             let subscribe = subscribes.get_mut(&id).ok_or(ServeError::NotFound)?;
 
-            match header {
-                data::Header::Track(track) => Writer::Track(subscribe.track(track)?),
-                data::Header::Subgroup(subgroup) => Writer::Subgroup(subscribe.subgroup(subgroup)?),
+            if stream_header.header_type.is_subgroup() {
+                Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
+            } else {
+                panic!("Fetch not implemented yet!")
             }
         };
 
         match writer {
-            Writer::Track(track) => Self::recv_track(track, reader).await?,
-            Writer::Subgroup(group) => Self::recv_subgroup(group, reader).await?,
-        };
-
-        Ok(())
-    }
-
-    async fn recv_track(
-        mut track: serve::StreamWriter,
-        mut reader: Reader,
-    ) -> Result<(), SessionError> {
-        log::trace!("received track: {:?}", track.info);
-
-        let mut prev: Option<serve::StreamGroupWriter> = None;
-
-        while !reader.done().await? {
-            let chunk: data::TrackObject = reader.decode().await?;
-
-            let mut group = match prev {
-                Some(group) if group.group_id == chunk.group_id => group,
-                _ => track.create(chunk.group_id)?,
-            };
-
-            let mut object = group.create(chunk.size)?;
-
-            let mut remain = chunk.size;
-            while remain > 0 {
-                let chunk = reader
-                    .read_chunk(remain)
-                    .await?
-                    .ok_or(SessionError::WrongSize)?;
-
-                log::trace!("received track payload: {:?}", chunk.len());
-                remain -= chunk.len();
-                object.write(chunk)?;
+            //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
+            Writer::Subgroup(subgroup) => {
+                Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?
             }
-
-            prev = Some(group);
-        }
+        };
 
         Ok(())
     }
 
     async fn recv_subgroup(
-        mut group: serve::SubgroupWriter,
+        stream_header_type: data::StreamHeaderType,
+        mut subgroup_writer: serve::SubgroupWriter,
         mut reader: Reader,
     ) -> Result<(), SessionError> {
-        log::trace!("received group: {:?}", group.info);
+        log::trace!("received subgroup: {:?}", subgroup_writer.info);
 
         while !reader.done().await? {
-            let object: data::SubgroupObject = reader.decode().await?;
+            // Need to be able to decode the subgroup object conditionally based on the stream header type
+            // read the object payload length into remaining_bytes
+            let mut remaining_bytes = match stream_header_type.has_extension_headers() {
+                true => {
+                    let object = reader.decode::<data::SubgroupObjectExt>().await?;
+                    log::trace!(
+                        "received subgroup object with extension headers: {:?}",
+                        object
+                    );
+                    object.payload_length
+                }
+                false => {
+                    let object = reader.decode::<data::SubgroupObject>().await?;
+                    log::trace!("received subgroup object: {:?}", object);
+                    object.payload_length
+                }
+            };
 
-            log::trace!("received group object: {:?}", object);
-            let mut remain = object.size;
-            let mut object = group.create(object.size)?;
+            // TODO SLG - object_id_delta, extension headers and object status are being ignored and not passed on
 
-            while remain > 0 {
+            let mut object_writer = subgroup_writer.create(remaining_bytes)?;
+
+            while remaining_bytes > 0 {
                 let data = reader
-                    .read_chunk(remain)
+                    .read_chunk(remaining_bytes)
                     .await?
                     .ok_or(SessionError::WrongSize)?;
-                log::trace!("received group payload: {:?}", data.len());
-                remain -= data.len();
-                object.write(data)?;
+                //log::trace!("received subgroup payload: {:?}", data.len());
+                remaining_bytes -= data.len();
+                object_writer.write(data)?;
             }
         }
 
@@ -296,7 +292,8 @@ impl Subscriber {
             .subscribes
             .lock()
             .unwrap()
-            .get_mut(&datagram.subscribe_id)
+            .get_mut(&datagram.track_alias)
+        // TODO SLG - look up subscription with track_alias, not subscription id - fix me!
         {
             subscribe.datagram(datagram)?;
         }

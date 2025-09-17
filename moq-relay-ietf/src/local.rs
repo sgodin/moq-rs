@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use moq_transport::{
-    coding::Tuple,
+    coding::TrackNamespace,
     serve::{ServeError, TracksReader},
 };
 
 #[derive(Clone)]
 pub struct Locals {
-    lookup: Arc<Mutex<HashMap<Tuple, TracksReader>>>,
+    lookup: Arc<Mutex<HashMap<TrackNamespace, TracksReader>>>,
 }
 
 impl Default for Locals {
@@ -41,14 +41,14 @@ impl Locals {
         Ok(registration)
     }
 
-    pub fn route(&self, namespace: &Tuple) -> Option<TracksReader> {
+    pub fn route(&self, namespace: &TrackNamespace) -> Option<TracksReader> {
         self.lookup.lock().unwrap().get(namespace).cloned()
     }
 }
 
 pub struct Registration {
     locals: Locals,
-    namespace: Tuple,
+    namespace: TrackNamespace,
 }
 
 impl Drop for Registration {

@@ -1,98 +1,53 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params, Tuple};
-use crate::message::subscribe::{SubscribeLocation, SubscribePair};
-use crate::message::FilterType;
-use crate::message::GroupOrder;
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, Location};
 
 /// Sent by the subscriber to request all future objects for the given track.
 ///
 /// Objects will use the provided ID instead of the full track name, to save bytes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscribeUpdate {
-    /// The subscription ID
+    /// The request ID of this request
     pub id: u64,
 
-    /// Track properties
-    pub track_alias: u64, // This alias is useless but part of the spec
-    pub track_namespace: Tuple,
-    pub track_name: String,
+    /// The request ID of the SUBSCRIBE this message is updating.
+    pub subscription_request_id: u64,
 
-    // Subscriber Priority
+    /// The starting location
+    pub start_location: Location,
+    /// The end Group ID, plus 1.  A value of 0 means the subscription is open-ended.
+    pub end_group_id: u64,
+
+    /// Subscriber Priority
     pub subscriber_priority: u8,
-    pub group_order: GroupOrder,
 
-    /// Filter type
-    pub filter_type: FilterType,
-
-    /// The start/end group/object. (TODO: Make optional)
-    pub start: Option<SubscribePair>, // TODO: Make optional
-    pub end: Option<SubscribePair>, // TODO: Make optional
+    /// Forward Flag
+    pub forward: bool,
 
     /// Optional parameters
-    pub params: Params,
+    pub params: KeyValuePairs,
 }
 
 impl Decode for SubscribeUpdate {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
         let id = u64::decode(r)?;
-        let track_alias = u64::decode(r)?;
-        let track_namespace = Tuple::decode(r)?;
-        let track_name = String::decode(r)?;
+
+        let subscription_request_id = u64::decode(r)?;
+
+        let start_location = Location::decode(r)?;
+        let end_group_id = u64::decode(r)?;
 
         let subscriber_priority = u8::decode(r)?;
-        let group_order = GroupOrder::decode(r)?;
 
-        let filter_type = FilterType::decode(r)?;
+        let forward = bool::decode(r)?;
 
-        let start: Option<SubscribePair>;
-        let end: Option<SubscribePair>;
-        match filter_type {
-            FilterType::AbsoluteStart => {
-                if r.remaining() < 2 {
-                    return Err(DecodeError::MissingField);
-                }
-                start = Some(SubscribePair::decode(r)?);
-                end = None;
-            }
-            FilterType::AbsoluteRange => {
-                if r.remaining() < 4 {
-                    return Err(DecodeError::MissingField);
-                }
-                start = Some(SubscribePair::decode(r)?);
-                end = Some(SubscribePair::decode(r)?);
-            }
-            _ => {
-                start = None;
-                end = None;
-            }
-        }
-
-        if let Some(s) = &start {
-            // You can't have a start object without a start group.
-            if s.group == SubscribeLocation::None && s.object != SubscribeLocation::None {
-                return Err(DecodeError::InvalidSubscribeLocation);
-            }
-        }
-        if let Some(e) = &end {
-            // You can't have an end object without an end group.
-            if e.group == SubscribeLocation::None && e.object != SubscribeLocation::None {
-                return Err(DecodeError::InvalidSubscribeLocation);
-            }
-        }
-
-        // NOTE: There's some more location restrictions in the draft, but they're enforced at a higher level.
-
-        let params = Params::decode(r)?;
+        let params = KeyValuePairs::decode(r)?;
 
         Ok(Self {
             id,
-            track_alias,
-            track_namespace,
-            track_name,
+            subscription_request_id,
+            start_location,
+            end_group_id,
             subscriber_priority,
-            group_order,
-            filter_type,
-            start,
-            end,
+            forward,
             params,
         })
     }
@@ -101,31 +56,46 @@ impl Decode for SubscribeUpdate {
 impl Encode for SubscribeUpdate {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.id.encode(w)?;
-        self.track_alias.encode(w)?;
-        self.track_namespace.encode(w)?;
-        self.track_name.encode(w)?;
+
+        self.subscription_request_id.encode(w)?;
+
+        self.start_location.encode(w)?;
+        self.end_group_id.encode(w)?;
 
         self.subscriber_priority.encode(w)?;
-        self.group_order.encode(w)?;
 
-        self.filter_type.encode(w)?;
-
-        if self.filter_type == FilterType::AbsoluteStart
-            || self.filter_type == FilterType::AbsoluteRange
-        {
-            if self.start.is_none() || self.end.is_none() {
-                return Err(EncodeError::MissingField);
-            }
-            if let Some(start) = &self.start {
-                start.encode(w)?;
-            }
-            if let Some(end) = &self.end {
-                end.encode(w)?;
-            }
-        }
+        self.forward.encode(w)?;
 
         self.params.encode(w)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        // One parameter for testing
+        let mut kvps = KeyValuePairs::new();
+        kvps.set_intvalue(124, 456);
+
+        let msg = SubscribeUpdate {
+            id: 1000,
+            subscription_request_id: 924,
+            start_location: Location::new(1, 1),
+            end_group_id: 100000,
+            subscriber_priority: 127,
+            forward: true,
+            params: kvps.clone(),
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = SubscribeUpdate::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
     }
 }

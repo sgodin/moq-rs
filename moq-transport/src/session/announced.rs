@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::coding::Tuple;
+use crate::coding::{ReasonPhrase, TrackNamespace};
 use crate::watch::State;
 use crate::{message, serve::ServeError};
 
@@ -22,8 +22,15 @@ pub struct Announced {
 }
 
 impl Announced {
-    pub(super) fn new(session: Subscriber, namespace: Tuple) -> (Announced, AnnouncedRecv) {
-        let info = AnnounceInfo { namespace };
+    pub(super) fn new(
+        session: Subscriber,
+        request_id: u64,
+        namespace: TrackNamespace,
+    ) -> (Announced, AnnouncedRecv) {
+        let info = AnnounceInfo {
+            request_id,
+            namespace,
+        };
 
         let (send, recv) = State::default().split();
         let send = Self {
@@ -44,8 +51,8 @@ impl Announced {
             return Err(ServeError::Duplicate);
         }
 
-        self.session.send_message(message::AnnounceOk {
-            namespace: self.namespace.clone(),
+        self.session.send_message(message::PublishNamespaceOk {
+            id: self.info.request_id,
         });
 
         self.ok = true;
@@ -83,18 +90,18 @@ impl Drop for Announced {
     fn drop(&mut self) {
         let err = self.error.clone().unwrap_or(ServeError::Done);
 
-        // TODO: Not sure if the error code is correct.
+        // TODO SLG - ServeError's do not align with draft-13 Announce error codes (section 8.25)
         if self.ok {
-            self.session.send_message(message::AnnounceCancel {
-                namespace: self.namespace.clone(),
-                error_code: 0_u64,
-                reason_phrase: "".into(),
+            self.session.send_message(message::PublishNamespaceCancel {
+                track_namespace: self.namespace.clone(),
+                error_code: err.code(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         } else {
-            self.session.send_message(message::AnnounceError {
-                namespace: self.namespace.clone(),
+            self.session.send_message(message::PublishNamespaceError {
+                id: self.info.request_id,
                 error_code: err.code(),
-                reason_phrase: err.to_string(),
+                reason_phrase: ReasonPhrase(err.to_string()),
             });
         }
     }

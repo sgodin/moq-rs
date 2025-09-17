@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5](https://github.com/englishm/moq-rs/compare/moq-clock-ietf-v0.6.4...moq-clock-ietf-v0.6.5) - 2025-09-15
+
+### Other
+
+- cargo fmt
+- Cleanup linter warnings
+- Start updating control messaging to draft-13 level
+
 ## [0.6.4](https://github.com/englishm/moq-rs/compare/moq-clock-ietf-v0.6.3...moq-clock-ietf-v0.6.4) - 2025-02-24
 
 ### Other

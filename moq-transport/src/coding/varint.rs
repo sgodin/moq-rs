@@ -222,11 +222,12 @@ impl Encode for VarInt {
     }
 }
 
+// It is doubtful the MOQ specs would ever ask us to encode/decode a u64 to the wire directly without
+// VarInt encoding. These encode/decode methods offer some nice syntactic sugar.
 impl Encode for u64 {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let var = VarInt::try_from(*self)?;
-        var.encode(w)
+        VarInt::try_from(*self)?.encode(w)
     }
 }
 
@@ -236,6 +237,9 @@ impl Decode for u64 {
     }
 }
 
+// The MOQ specs would never ask us to encode/decode a usize to the wire directly without VarInt
+// encoding, since it's actual size is depended on 32bit vs 64bit compilations.  These encode/decode
+// methods offer some nice syntactic sugar.
 impl Encode for usize {
     /// Encode a varint to the given writer.
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
@@ -244,24 +248,164 @@ impl Encode for usize {
     }
 }
 
-impl Encode for u8 {
-    /// Encode a u8 to the given writer.
-    fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        let x = *self;
-        w.put_u8(x);
-        Ok(())
-    }
-}
-
-impl Decode for u8 {
-    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        Self::decode_remaining(r, 1)?;
-        Ok(r.get_u8())
-    }
-}
-
 impl Decode for usize {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        VarInt::decode(r).map(|v| v.into_inner() as usize)
+        let var = VarInt::decode(r)?;
+        // Note: If 32-bit system, then VarInt may not fit into usize
+        #[allow(clippy::unnecessary_fallible_conversions)]
+        usize::try_from(var).map_err(|_| DecodeError::BoundsExceeded(BoundsExceeded))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode_usize() {
+        let mut buf = BytesMut::new();
+
+        let i: usize = 123;
+        i.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0x40, 0x7b]); // first 2 bits are 01
+        let decoded = usize::decode(&mut buf).unwrap();
+        assert_eq!(decoded, i);
+    }
+
+    #[test]
+    fn encode_usize_overflow() {
+        let i: u64 = 4611686018427387904;
+        // This test is only applicable on 64-bit systems
+        if i < usize::MAX as u64 {
+            let i = i as usize;
+            let mut buf = BytesMut::new();
+            let encoded = i.encode(&mut buf);
+            assert!(matches!(
+                encoded.unwrap_err(),
+                EncodeError::BoundsExceeded(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn encode_decode_u64() {
+        let mut buf = BytesMut::new();
+
+        let i: u64 = 123;
+        i.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0x40, 0x7b]); // first 2 bits are 01
+        let decoded = u64::decode(&mut buf).unwrap();
+        assert_eq!(decoded, i);
+    }
+
+    #[test]
+    fn encode_u64_overflow() {
+        let mut buf = BytesMut::new();
+
+        let i: u64 = 4611686018427387904;
+        let encoded = i.encode(&mut buf);
+        assert!(matches!(
+            encoded.unwrap_err(),
+            EncodeError::BoundsExceeded(_)
+        ));
+    }
+
+    #[test]
+    fn encode_decode_varint() {
+        let mut buf = BytesMut::new();
+
+        // 0 -> 1 byte
+        let i = 0;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b0000_0000]); // first 2 bits are 00
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 63 -> 1 byte
+        let i = 63;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b0011_1111]); // first 2 bits are 00
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 64 -> 2 bytes
+        let i = 64;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b0100_0000, 0b0100_0000]); // first 2 bits are 01
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 16383 -> 2 bytes
+        let i = 16383;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b0111_1111, 0xff]); // first 2 bits are 01
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 16384 -> 4 bytes
+        let i = 16384;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b1000_0000, 0x00, 0x40, 0x00]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 1073741823 -> 4 bytes
+        let i = 1073741823;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(buf.to_vec(), vec![0b1011_1111, 0xff, 0xff, 0xff]); // first 2 bits are 10
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 1073741824 -> 8 bytes
+        let i = 1073741824;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(
+            buf.to_vec(),
+            // first 2 bits are 11
+            vec![0b1100_0000, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00]
+        );
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+
+        // 4611686018427387903 -> 8 bytes
+        let i = 4611686018427387903;
+        let vi = VarInt(i);
+        vi.encode(&mut buf).unwrap();
+        assert_eq!(
+            buf.to_vec(),
+            // first 2 bits are 11
+            vec![0b1111_1111, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
+        let decoded = VarInt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, vi);
+        assert_eq!(u64::try_from(decoded).unwrap(), i);
+    }
+
+    #[test]
+    fn overflow() {
+        let mut buf = BytesMut::new();
+
+        let i = 4611686018427387904;
+        let vi = VarInt(i);
+        let decoded = vi.encode(&mut buf);
+        assert!(matches!(
+            decoded.unwrap_err(),
+            EncodeError::BoundsExceeded(_)
+        ));
     }
 }

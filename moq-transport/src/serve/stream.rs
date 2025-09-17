@@ -245,7 +245,7 @@ impl StreamGroupWriter {
         let (writer, reader) = StreamObject {
             group: self.info.clone(),
             object_id: self.next,
-            status: ObjectStatus::Object,
+            status: ObjectStatus::NormalObject,
             size,
         }
         .produce();

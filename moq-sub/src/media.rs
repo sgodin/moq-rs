@@ -80,7 +80,7 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
             let id = trak.tkhd.track_id;
             let name: String = match catalog {
                 Some(ref c) => c.tracks[idx].name.clone(),
-                None => format!("{}.m4s", id),
+                None => format!("{id}.m4s"),
             };
             info!("found track {name}");
             let mut active = false;

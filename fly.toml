@@ -3,7 +3,8 @@ kill_signal = "SIGINT"
 kill_timeout = 5
 
 [env]
-PORT = "4443"
+PORT = "443"
+RUST_LOG="info"
 
 [experimental]
 cmd = "./fly-relay.sh"

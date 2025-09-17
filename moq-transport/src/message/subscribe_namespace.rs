@@ -1,23 +1,27 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, Params, Tuple};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs, TrackNamespace};
 
 /// Subscribe Namespace
-/// https://www.ietf.org/archive/id/draft-ietf-moq-transport-06.html#section-6.11
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscribeNamespace {
-    /// The track namespace
-    pub namespace_prefix: Tuple,
+    /// The subscription request ID
+    pub id: u64,
+
+    /// The track namespace prefix
+    pub track_namespace_prefix: TrackNamespace,
 
     /// Optional parameters
-    pub params: Params,
+    pub params: KeyValuePairs,
 }
 
 impl Decode for SubscribeNamespace {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let namespace_prefix = Tuple::decode(r)?;
-        let params = Params::decode(r)?;
+        let id = u64::decode(r)?;
+        let track_namespace_prefix = TrackNamespace::decode(r)?;
+        let params = KeyValuePairs::decode(r)?;
 
         Ok(Self {
-            namespace_prefix,
+            id,
+            track_namespace_prefix,
             params,
         })
     }
@@ -25,9 +29,34 @@ impl Decode for SubscribeNamespace {
 
 impl Encode for SubscribeNamespace {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        self.namespace_prefix.encode(w)?;
+        self.id.encode(w)?;
+        self.track_namespace_prefix.encode(w)?;
         self.params.encode(w)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode() {
+        let mut buf = BytesMut::new();
+
+        // One parameter for testing
+        let mut kvps = KeyValuePairs::new();
+        kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
+
+        let msg = SubscribeNamespace {
+            id: 12345,
+            track_namespace_prefix: TrackNamespace::from_utf8_path("path/prefix"),
+            params: kvps,
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = SubscribeNamespace::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
     }
 }
