@@ -66,7 +66,7 @@ impl Encode for Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::setup::Version;
+    use crate::setup::{Version, ParameterType};
     use bytes::BytesMut;
 
     #[test]
@@ -74,7 +74,7 @@ mod tests {
         let mut buf = BytesMut::new();
 
         let mut params = KeyValuePairs::default();
-        params.set_bytesvalue(0x01 /* Path */, "testpath".as_bytes().to_vec());
+        params.set_bytesvalue(ParameterType::Path.into(), "testpath".as_bytes().to_vec());
 
         let client = Client {
             versions: [Version::DRAFT_13].into(),

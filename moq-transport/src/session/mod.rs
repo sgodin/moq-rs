@@ -27,6 +27,7 @@ use std::sync::{atomic, Arc};
 use crate::message::Message;
 use crate::watch::Queue;
 use crate::{message, setup};
+use crate::coding::KeyValuePairs;
 
 /// Session object for managing all communications in a single QUIC connection.
 #[must_use = "run() must be called"]
@@ -91,9 +92,13 @@ impl Session {
 
         let versions: setup::Versions = [setup::Version::DRAFT_14].into();
 
+        // TODO SLG - make configurable?
+        let mut params = KeyValuePairs::default();
+        params.set_intvalue(setup::ParameterType::MaxRequestId.into(), 100);
+
         let client = setup::Client {
             versions: versions.clone(),
-            params: Default::default(),
+            params
         };
 
         log::debug!("sending CLIENT_SETUP: {:?}", client);
@@ -124,9 +129,13 @@ impl Session {
         if let Some(largest_common_version) =
             Self::largest_common(&server_versions, &client.versions)
         {
+            // TODO SLG - make configurable?
+            let mut params = KeyValuePairs::default();
+            params.set_intvalue(setup::ParameterType::MaxRequestId.into(), 100);
+
             let server = setup::Server {
                 version: largest_common_version,
-                params: Default::default(),
+                params,
             };
 
             log::debug!("sending SERVER_SETUP: {:?}", server);

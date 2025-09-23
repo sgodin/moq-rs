@@ -66,13 +66,14 @@ impl Encode for Server {
 mod tests {
     use super::*;
     use bytes::BytesMut;
+    use crate::setup::ParameterType;
 
     #[test]
     fn encode_decode() {
         let mut buf = BytesMut::new();
 
         let mut params = KeyValuePairs::default();
-        params.set_intvalue(0x02 /* MaxRequestId */, 1000);
+        params.set_intvalue(ParameterType::MaxRequestId.into(), 1000);
 
         let server = Server {
             version: Version::DRAFT_14,

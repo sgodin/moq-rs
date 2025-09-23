@@ -7,9 +7,11 @@
 mod client;
 mod server;
 mod version;
+mod param_types;
 
 pub use client::*;
 pub use server::*;
 pub use version::*;
+pub use param_types::*;
 
 pub const ALPN: &[u8] = b"moq-00";

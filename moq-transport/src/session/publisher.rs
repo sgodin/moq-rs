@@ -25,7 +25,7 @@ pub struct Publisher {
     /// When the announce method is used, a new entry is added to this HashMap to track outbound announcement
     announces: Arc<Mutex<HashMap<TrackNamespace, AnnounceRecv>>>,
 
-    /// When a Subscribe is received and we have a previous annouce for the namespace, then a new entry is
+    /// When a Subscribe is received and we have a previous announce for the namespace, then a new entry is
     /// added to this HashMap to track the inbound subscription
     subscribed: Arc<Mutex<HashMap<u64, SubscribedRecv>>>,
 

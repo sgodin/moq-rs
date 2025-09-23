@@ -193,7 +193,7 @@ impl Subscribed {
                 res = subgroups.next(), if done.is_none() => match res {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
-                            header_type: data::StreamHeaderType::SubgroupId,  // SubGroupId = Yes, Extensions = No, ContainsEnd = No
+                            header_type: data::StreamHeaderType::SubgroupIdEndOfGroup,  // SubGroupId = Yes, Extensions = No, ContainsEndOfGroup = yes
                             track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
                             group_id: subgroup.group_id,
                             subgroup_id: Some(subgroup.subgroup_id),
@@ -239,7 +239,7 @@ impl Subscribed {
 
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
             let subgroup_object = data::SubgroupObject {
-                object_id_delta: subgroup_object_reader.object_id,
+                object_id_delta: 0, // before delta logic, used to be subgroup_object_reader.object_id,
                 payload_length: subgroup_object_reader.size,
                 status: if subgroup_object_reader.size == 0 {
                     // Only set status if payload length is zero
