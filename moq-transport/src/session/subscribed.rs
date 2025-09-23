@@ -100,8 +100,8 @@ impl Subscribed {
 
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
-            track_alias: self.msg.id,  // TODO SLG - use subscription id for now, needs fixing
-            expires: 3600,                                // TODO SLG
+            track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
+            expires: 3600,            // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
             content_exists: latest.is_some(),
             largest_location: latest,

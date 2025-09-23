@@ -101,8 +101,9 @@ impl Subscribe {
 
 impl Drop for Subscribe {
     fn drop(&mut self) {
-        self.subscriber
-            .send_message(message::Unsubscribe { id: self.request_id });
+        self.subscriber.send_message(message::Unsubscribe {
+            id: self.request_id,
+        });
     }
 }
 
