@@ -24,10 +24,10 @@ use writer::*;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::sync::{atomic, Arc};
 
+use crate::coding::KeyValuePairs;
 use crate::message::Message;
 use crate::watch::Queue;
 use crate::{message, setup};
-use crate::coding::KeyValuePairs;
 
 /// Session object for managing all communications in a single QUIC connection.
 #[must_use = "run() must be called"]
@@ -98,7 +98,7 @@ impl Session {
 
         let client = setup::Client {
             versions: versions.clone(),
-            params
+            params,
         };
 
         log::debug!("sending CLIENT_SETUP: {:?}", client);

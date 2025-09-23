@@ -5,13 +5,13 @@
 //! Both sides negotate the [Version] and [Role].
 
 mod client;
+mod param_types;
 mod server;
 mod version;
-mod param_types;
 
 pub use client::*;
+pub use param_types::*;
 pub use server::*;
 pub use version::*;
-pub use param_types::*;
 
 pub const ALPN: &[u8] = b"moq-00";

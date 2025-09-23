@@ -66,7 +66,7 @@ impl Encode for Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::setup::{Version, ParameterType};
+    use crate::setup::{ParameterType, Version};
     use bytes::BytesMut;
 
     #[test]

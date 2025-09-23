@@ -65,8 +65,8 @@ impl Encode for Server {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
     use crate::setup::ParameterType;
+    use bytes::BytesMut;
 
     #[test]
     fn encode_decode() {
