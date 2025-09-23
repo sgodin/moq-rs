@@ -5,6 +5,7 @@ use moq_transport::serve::{
 };
 
 use chrono::prelude::*;
+use tokio::task;
 
 pub struct Publisher {
     track: SubgroupsWriter,
@@ -115,18 +116,29 @@ impl Subscriber {
 
     async fn recv_subgroups(mut subgroups: SubgroupsReader) -> anyhow::Result<()> {
         while let Some(mut subgroup) = subgroups.next().await? {
-            let base = subgroup
-                .read_next()
+            // Spawn a new task to handle the subgroup concurrently
+            task::spawn(async move {
+                if let Err(e) = async {
+                    let base = subgroup
+                        .read_next()
+                        .await
+                        .context("failed to get first object")?
+                        .context("empty subgroup")?;
+
+                    let base = String::from_utf8_lossy(&base);
+
+                    while let Some(object) = subgroup.read_next().await? {
+                        let str = String::from_utf8_lossy(&object);
+                        println!("{base}{str}");
+                    }
+
+                    Ok::<(), anyhow::Error>(())
+                }
                 .await
-                .context("failed to get first object")?
-                .context("empty subgroup")?;
-
-            let base = String::from_utf8_lossy(&base);
-
-            while let Some(object) = subgroup.read_next().await? {
-                let str = String::from_utf8_lossy(&object);
-                println!("{base}{str}");
-            }
+                {
+                    eprintln!("Error handling subgroup: {:?}", e);
+                }
+            });
         }
 
         Ok(())

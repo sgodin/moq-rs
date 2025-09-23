@@ -61,7 +61,7 @@ impl Encode for KeyValuePair {
         match &self.value {
             Value::IntValue(v) => {
                 // key must be even for IntValue
-                if (self.key % 2) != 0 {
+                if !self.key.is_multiple_of(2) {
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;
@@ -70,7 +70,7 @@ impl Encode for KeyValuePair {
             }
             Value::BytesValue(v) => {
                 // key must be odd for BytesValue
-                if (self.key % 2) == 0 {
+                if self.key.is_multiple_of(2) {
                     return Err(EncodeError::InvalidValue);
                 }
                 self.key.encode(w)?;

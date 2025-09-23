@@ -65,6 +65,7 @@ impl Encode for Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::setup::ParameterType;
     use bytes::BytesMut;
 
     #[test]
@@ -72,7 +73,7 @@ mod tests {
         let mut buf = BytesMut::new();
 
         let mut params = KeyValuePairs::default();
-        params.set_intvalue(0x02 /* MaxRequestId */, 1000);
+        params.set_intvalue(ParameterType::MaxRequestId.into(), 1000);
 
         let server = Server {
             version: Version::DRAFT_14,

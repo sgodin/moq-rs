@@ -162,4 +162,42 @@ impl Encode for SubgroupObjectExt {
     }
 }
 
-// TODO SLG - add unit tests
+// TODO SLG - add more unit tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn encode_decode_object() {
+        let mut buf = BytesMut::new();
+
+        let msg = SubgroupObject {
+            object_id_delta: 0,
+            payload_length: 7,
+            status: None,
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = SubgroupObject::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn encode_decode_object_ext() {
+        let mut buf = BytesMut::new();
+
+        // One ExtensionHeader for testing
+        let mut kvps = KeyValuePairs::new();
+        kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
+
+        let msg = SubgroupObjectExt {
+            object_id_delta: 0,
+            extension_headers: kvps,
+            payload_length: 7,
+            status: None,
+        };
+        msg.encode(&mut buf).unwrap();
+        let decoded = SubgroupObjectExt::decode(&mut buf).unwrap();
+        assert_eq!(decoded, msg);
+    }
+}
