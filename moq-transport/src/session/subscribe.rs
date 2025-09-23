@@ -36,7 +36,7 @@ impl Default for SubscribeState {
 pub struct Subscribe {
     state: State<SubscribeState>,
     subscriber: Subscriber,
-    id: u64,
+    request_id: u64,
 
     pub info: SubscribeInfo,
 }
@@ -44,11 +44,11 @@ pub struct Subscribe {
 impl Subscribe {
     pub(super) fn new(
         mut subscriber: Subscriber,
-        id: u64,
+        request_id: u64,
         track: TrackWriter,
     ) -> (Subscribe, SubscribeRecv) {
         subscriber.send_message(message::Subscribe {
-            id,
+            id: request_id,
             track_namespace: track.namespace.clone(),
             track_name: track.name.clone(),
             // TODO add prioritization logic on the publisher side
@@ -71,7 +71,7 @@ impl Subscribe {
         let send = Subscribe {
             state: send,
             subscriber,
-            id,
+            request_id,
             info,
         };
 
@@ -102,7 +102,7 @@ impl Subscribe {
 impl Drop for Subscribe {
     fn drop(&mut self) {
         self.subscriber
-            .send_message(message::Unsubscribe { id: self.id });
+            .send_message(message::Unsubscribe { id: self.request_id });
     }
 }
 

@@ -27,7 +27,7 @@ pub struct Publisher {
 
     /// When a Subscribe is received and we have a previous announce for the namespace, then a new entry is
     /// added to this HashMap to track the inbound subscription
-    subscribed: Arc<Mutex<HashMap<u64, SubscribedRecv>>>,
+    subscribeds: Arc<Mutex<HashMap<u64, SubscribedRecv>>>,
 
     /// When a Subscribe is received and we DO NOT have a previous annouce for the namespace, then a new entry is
     /// added to this Queue to track the inbound subscription
@@ -54,7 +54,7 @@ impl Publisher {
         Self {
             webtransport,
             announces: Default::default(),
-            subscribed: Default::default(),
+            subscribeds: Default::default(),
             unknown: Default::default(),
             outgoing,
             next_requestid,
@@ -105,8 +105,15 @@ impl Publisher {
         let mut subscribe_done = false;
         let mut status_done = false;
 
+        // The code enters an infinite loop and waits for one of several events:
+        // - A new subscription arrives.
+        // - A new track status request arrives.
+        // - One of the spawned subscription-handling tasks completes.
+        // - One of the spawned status-handling tasks completes.
+        // Exit the loop when all input streams are done (None), and all tasks have completed
         loop {
             tokio::select! {
+                // Get next subscription to this announce
                 res = announce.subscribed(), if !subscribe_done => {
                     match res? {
                         Some(subscribed) => {
@@ -146,13 +153,13 @@ impl Publisher {
     }
 
     pub async fn serve_subscribe(
-        subscribe: Subscribed,
+        subscribed: Subscribed,
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
-        if let Some(track) = tracks.subscribe(&subscribe.name) {
-            subscribe.serve(track).await?;
+        if let Some(track) = tracks.subscribe(&subscribed.name) {
+            subscribed.serve(track).await?;
         } else {
-            subscribe.close(ServeError::NotFound)?;
+            subscribed.close(ServeError::NotFound)?;
         }
 
         Ok(())
@@ -288,15 +295,16 @@ impl Publisher {
     fn recv_subscribe(&mut self, msg: message::Subscribe) -> Result<(), SessionError> {
         let namespace = msg.track_namespace.clone();
 
-        let subscribe = {
-            let mut subscribes = self.subscribed.lock().unwrap();
+        let subscribed = {
+            let mut subscribeds = self.subscribeds.lock().unwrap();
 
-            // Insert the abort handle into the lookup table.
-            let entry = match subscribes.entry(msg.id) {
+            // See if entry exists for this request id already, if so error out
+            let entry = match subscribeds.entry(msg.id) {
                 hash_map::Entry::Occupied(_) => return Err(SessionError::Duplicate),
                 hash_map::Entry::Vacant(entry) => entry,
             };
 
+            // Create new Subscribed entry and add to HashMap
             let (send, recv) = Subscribed::new(self.clone(), msg);
             entry.insert(recv);
 
@@ -305,12 +313,12 @@ impl Publisher {
 
         // If we have an announce, route the subscribe to it.
         if let Some(announce) = self.announces.lock().unwrap().get_mut(&namespace) {
-            return announce.recv_subscribe(subscribe).map_err(Into::into);
+            return announce.recv_subscribe(subscribed).map_err(Into::into);
         }
 
         // Otherwise, put it in the unknown queue.
         // TODO Have some way to detect if the application is not reading from the unknown queue.
-        if let Err(err) = self.unknown.push(subscribe) {
+        if let Err(err) = self.unknown.push(subscribed) {
             // Default to closing with a not found error I guess.
             err.close(ServeError::NotFound)?;
         }
@@ -342,7 +350,7 @@ impl Publisher {
     }
 
     fn recv_unsubscribe(&mut self, msg: message::Unsubscribe) -> Result<(), SessionError> {
-        if let Some(subscribed) = self.subscribed.lock().unwrap().get_mut(&msg.id) {
+        if let Some(subscribed) = self.subscribeds.lock().unwrap().get_mut(&msg.id) {
             subscribed.recv_unsubscribe()?;
         }
 
@@ -364,7 +372,7 @@ impl Publisher {
     }
 
     fn drop_subscribe(&mut self, id: u64) {
-        self.subscribed.lock().unwrap().remove(&id);
+        self.subscribeds.lock().unwrap().remove(&id);
     }
 
     fn drop_publish_namespace(&mut self, namespace: &TrackNamespace) {
