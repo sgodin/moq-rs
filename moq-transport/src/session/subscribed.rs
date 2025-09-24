@@ -3,7 +3,7 @@ use std::ops;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
-use crate::coding::{Encode, Location, ReasonPhrase};
+use crate::coding::{Encode, KeyValuePairs, Location, ReasonPhrase};
 use crate::serve::{ServeError, TrackReaderMode};
 use crate::watch::State;
 use crate::{data, message, serve};
@@ -101,7 +101,7 @@ impl Subscribed {
         self.publisher.send_message(message::SubscribeOk {
             id: self.msg.id,
             track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
-            expires: 3600,            // TODO SLG
+            expires: 0,               // TODO SLG
             group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
             content_exists: latest.is_some(),
             largest_location: latest,
@@ -193,7 +193,7 @@ impl Subscribed {
                 res = subgroups.next(), if done.is_none() => match res {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
-                            header_type: data::StreamHeaderType::SubgroupIdEndOfGroup,  // SubGroupId = Yes, Extensions = No, ContainsEndOfGroup = yes
+                            header_type: data::StreamHeaderType::SubgroupIdExt,  // SubGroupId = Yes, Extensions = Yes, ContainsEndOfGroup = No
                             track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
                             group_id: subgroup.group_id,
                             subgroup_id: Some(subgroup.subgroup_id),
@@ -238,8 +238,9 @@ impl Subscribed {
         writer.encode(&header).await?;
 
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
-            let subgroup_object = data::SubgroupObject {
+            let subgroup_object = data::SubgroupObjectExt {
                 object_id_delta: 0, // before delta logic, used to be subgroup_object_reader.object_id,
+                extension_headers: KeyValuePairs::new(), // TODO SLG - empty for now
                 payload_length: subgroup_object_reader.size,
                 status: if subgroup_object_reader.size == 0 {
                     // Only set status if payload length is zero
