@@ -29,7 +29,7 @@ pub fn format_hex_detailed(data: &[u8], max_bytes: usize) -> String {
     let ascii_part: String = display_data
         .iter()
         .map(|&b| {
-            if b >= 32 && b <= 126 {
+            if (32..=126).contains(&b) {
                 b as char
             } else {
                 '.'
