@@ -45,7 +45,9 @@ impl SubgroupHeader {
                 Some(id)
             }
             false => {
-                log::trace!("[DECODE] SubgroupHeader: subgroup_id=None (not present for this header type)");
+                log::trace!(
+                    "[DECODE] SubgroupHeader: subgroup_id=None (not present for this header type)"
+                );
                 None
             }
         };
@@ -94,17 +96,29 @@ impl Encode for SubgroupHeader {
         log::trace!("[ENCODE] SubgroupHeader: encoded header_type");
 
         self.track_alias.encode(w)?;
-        log::trace!("[ENCODE] SubgroupHeader: encoded track_alias={}", self.track_alias);
+        log::trace!(
+            "[ENCODE] SubgroupHeader: encoded track_alias={}",
+            self.track_alias
+        );
 
         self.group_id.encode(w)?;
-        log::trace!("[ENCODE] SubgroupHeader: encoded group_id={}", self.group_id);
+        log::trace!(
+            "[ENCODE] SubgroupHeader: encoded group_id={}",
+            self.group_id
+        );
 
         if self.header_type.has_subgroup_id() {
             if let Some(subgroup_id) = self.subgroup_id {
                 subgroup_id.encode(w)?;
-                log::trace!("[ENCODE] SubgroupHeader: encoded subgroup_id={}", subgroup_id);
+                log::trace!(
+                    "[ENCODE] SubgroupHeader: encoded subgroup_id={}",
+                    subgroup_id
+                );
             } else {
-                log::error!("[ENCODE] SubgroupHeader: MISSING subgroup_id for header_type={:?}", self.header_type);
+                log::error!(
+                    "[ENCODE] SubgroupHeader: MISSING subgroup_id for header_type={:?}",
+                    self.header_type
+                );
                 return Err(EncodeError::MissingField("SubgroupId".to_string()));
             }
         } else {
@@ -112,10 +126,16 @@ impl Encode for SubgroupHeader {
         }
 
         self.publisher_priority.encode(w)?;
-        log::trace!("[ENCODE] SubgroupHeader: encoded publisher_priority={}", self.publisher_priority);
+        log::trace!(
+            "[ENCODE] SubgroupHeader: encoded publisher_priority={}",
+            self.publisher_priority
+        );
 
         let bytes_written = start_pos - w.remaining_mut();
-        log::debug!("[ENCODE] SubgroupHeader complete: wrote {} bytes", bytes_written);
+        log::debug!(
+            "[ENCODE] SubgroupHeader complete: wrote {} bytes",
+            bytes_written
+        );
 
         Ok(())
     }
@@ -138,7 +158,10 @@ impl Decode for SubgroupObject {
         );
 
         let object_id_delta = u64::decode(r)?;
-        log::trace!("[DECODE] SubgroupObject: object_id_delta={}", object_id_delta);
+        log::trace!(
+            "[DECODE] SubgroupObject: object_id_delta={}",
+            object_id_delta
+        );
 
         let payload_length = usize::decode(r)?;
         log::trace!("[DECODE] SubgroupObject: payload_length={}", payload_length);
@@ -185,10 +208,16 @@ impl Encode for SubgroupObject {
         );
 
         self.object_id_delta.encode(w)?;
-        log::trace!("[ENCODE] SubgroupObject: encoded object_id_delta={}", self.object_id_delta);
+        log::trace!(
+            "[ENCODE] SubgroupObject: encoded object_id_delta={}",
+            self.object_id_delta
+        );
 
         self.payload_length.encode(w)?;
-        log::trace!("[ENCODE] SubgroupObject: encoded payload_length={}", self.payload_length);
+        log::trace!(
+            "[ENCODE] SubgroupObject: encoded payload_length={}",
+            self.payload_length
+        );
 
         if self.payload_length == 0 {
             if let Some(status) = self.status {
@@ -226,18 +255,30 @@ impl Decode for SubgroupObjectExt {
         );
 
         let object_id_delta = u64::decode(r)?;
-        log::trace!("[DECODE] SubgroupObjectExt: object_id_delta={}", object_id_delta);
+        log::trace!(
+            "[DECODE] SubgroupObjectExt: object_id_delta={}",
+            object_id_delta
+        );
 
         let extension_headers = KeyValuePairs::decode(r)?;
-        log::trace!("[DECODE] SubgroupObjectExt: extension_headers={:?}", extension_headers);
+        log::trace!(
+            "[DECODE] SubgroupObjectExt: extension_headers={:?}",
+            extension_headers
+        );
 
         let payload_length = usize::decode(r)?;
-        log::trace!("[DECODE] SubgroupObjectExt: payload_length={}", payload_length);
+        log::trace!(
+            "[DECODE] SubgroupObjectExt: payload_length={}",
+            payload_length
+        );
 
         let status = match payload_length {
             0 => {
                 let s = ObjectStatus::decode(r)?;
-                log::trace!("[DECODE] SubgroupObjectExt: status={:?} (payload_length=0)", s);
+                log::trace!(
+                    "[DECODE] SubgroupObjectExt: status={:?} (payload_length=0)",
+                    s
+                );
                 Some(s)
             }
             _ => {
@@ -278,13 +319,19 @@ impl Encode for SubgroupObjectExt {
         );
 
         self.object_id_delta.encode(w)?;
-        log::trace!("[ENCODE] SubgroupObjectExt: encoded object_id_delta={}", self.object_id_delta);
+        log::trace!(
+            "[ENCODE] SubgroupObjectExt: encoded object_id_delta={}",
+            self.object_id_delta
+        );
 
         self.extension_headers.encode(w)?;
         log::trace!("[ENCODE] SubgroupObjectExt: encoded extension_headers");
 
         self.payload_length.encode(w)?;
-        log::trace!("[ENCODE] SubgroupObjectExt: encoded payload_length={}", self.payload_length);
+        log::trace!(
+            "[ENCODE] SubgroupObjectExt: encoded payload_length={}",
+            self.payload_length
+        );
 
         if self.payload_length == 0 {
             if let Some(status) = self.status {

@@ -336,9 +336,12 @@ impl Subscribed {
                 payload: Some(datagram.payload),
             };
 
-            let payload_len = encoded_datagram.payload.as_ref().map(|p| p.len()).unwrap_or(0);
-            let mut buffer =
-                bytes::BytesMut::with_capacity(payload_len + 100);
+            let payload_len = encoded_datagram
+                .payload
+                .as_ref()
+                .map(|p| p.len())
+                .unwrap_or(0);
+            let mut buffer = bytes::BytesMut::with_capacity(payload_len + 100);
             encoded_datagram.encode(&mut buffer)?;
 
             log::debug!(
@@ -356,7 +359,10 @@ impl Subscribed {
             self.state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_largest_location(encoded_datagram.group_id, encoded_datagram.object_id.unwrap())?;
+                .update_largest_location(
+                    encoded_datagram.group_id,
+                    encoded_datagram.object_id.unwrap(),
+                )?;
             // TODO SLG - fix up safety of unwrap()
 
             datagram_count += 1;

@@ -196,7 +196,10 @@ impl Subscriber {
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
-        log::trace!("[SUBSCRIBER] recv_stream: stream for subscription id={}", id);
+        log::trace!(
+            "[SUBSCRIBER] recv_stream: stream for subscription id={}",
+            id
+        );
 
         let res = self.recv_stream_inner(reader, stream_header).await;
         if let Err(SessionError::Serve(err)) = &res {
@@ -223,7 +226,10 @@ impl Subscriber {
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
-        log::trace!("[SUBSCRIBER] recv_stream_inner: processing stream for id={}", id);
+        log::trace!(
+            "[SUBSCRIBER] recv_stream_inner: processing stream for id={}",
+            id
+        );
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
         enum Writer {
@@ -257,7 +263,10 @@ impl Subscriber {
             }
         };
 
-        log::debug!("[SUBSCRIBER] recv_stream_inner: completed processing stream for id={}", id);
+        log::debug!(
+            "[SUBSCRIBER] recv_stream_inner: completed processing stream for id={}",
+            id
+        );
         Ok(())
     }
 

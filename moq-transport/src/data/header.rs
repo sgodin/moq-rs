@@ -77,7 +77,10 @@ impl Decode for StreamHeaderType {
         );
 
         let type_value = u64::decode(r)?;
-        log::trace!("[DECODE] StreamHeaderType: decoded type value={:#x}", type_value);
+        log::trace!(
+            "[DECODE] StreamHeaderType: decoded type value={:#x}",
+            type_value
+        );
 
         let header_type = match type_value {
             0x10_u64 => Ok(Self::SubgroupZeroId),
@@ -94,7 +97,10 @@ impl Decode for StreamHeaderType {
             0x1d_u64 => Ok(Self::SubgroupIdExtEndOfGroup),
             0x05_u64 => Ok(Self::Fetch),
             _ => {
-                log::error!("[DECODE] StreamHeaderType: INVALID type value={:#x}", type_value);
+                log::error!(
+                    "[DECODE] StreamHeaderType: INVALID type value={:#x}",
+                    type_value
+                );
                 Err(DecodeError::InvalidHeaderType)
             }
         };
@@ -138,7 +144,10 @@ impl Decode for StreamHeader {
         );
 
         let header_type = StreamHeaderType::decode(r)?;
-        log::trace!("[DECODE] StreamHeader: decoded header_type={:?}", header_type);
+        log::trace!(
+            "[DECODE] StreamHeader: decoded header_type={:?}",
+            header_type
+        );
 
         let subgroup_header = match header_type.is_subgroup() {
             true => {

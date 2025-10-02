@@ -14,11 +14,7 @@ pub fn format_hex(data: &[u8]) -> String {
 /// Example output: "01 02 03 04 05  |.....|"
 pub fn format_hex_detailed(data: &[u8], max_bytes: usize) -> String {
     let truncated = data.len() > max_bytes;
-    let display_data = if truncated {
-        &data[..max_bytes]
-    } else {
-        data
-    };
+    let display_data = if truncated { &data[..max_bytes] } else { data };
 
     let hex_part = display_data
         .iter()
@@ -38,8 +34,12 @@ pub fn format_hex_detailed(data: &[u8], max_bytes: usize) -> String {
         .collect();
 
     if truncated {
-        format!("{} ... (truncated, total {} bytes)  |{}...|", 
-                hex_part, data.len(), ascii_part)
+        format!(
+            "{} ... (truncated, total {} bytes)  |{}...|",
+            hex_part,
+            data.len(),
+            ascii_part
+        )
     } else {
         format!("{}  |{}|", hex_part, ascii_part)
     }
@@ -64,7 +64,9 @@ mod tests {
 
     #[test]
     fn test_format_hex_detailed_truncated() {
-        let data = vec![0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64];
+        let data = vec![
+            0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64,
+        ];
         let result = format_hex_detailed(&data, 5);
         assert!(result.contains("truncated"));
         assert!(result.contains("11 bytes"));
