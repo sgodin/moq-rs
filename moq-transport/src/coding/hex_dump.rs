@@ -1,4 +1,4 @@
-/// Utility functions for debugging byte sequences
+//! Utility functions for debugging byte sequences
 
 /// Format bytes as a hex string with spaces between bytes
 /// Example: [0x01, 0x02, 0x03] => "01 02 03"
