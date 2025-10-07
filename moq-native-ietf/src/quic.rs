@@ -103,9 +103,11 @@ impl Endpoint {
         let quic = quinn::Endpoint::new(endpoint_config, server_config.clone(), socket, runtime)
             .context("failed to create QUIC endpoint")?;
 
-        let server = server_config.is_some().then(|| Server {
+        let server = server_config.clone().map(|base_server_config| Server {
             quic: quic.clone(),
             accept: Default::default(),
+            _qlog_dir: config.qlog_dir.map(Arc::new),
+            _base_server_config: Arc::new(base_server_config),
         });
 
         let client = Client {
@@ -121,6 +123,8 @@ impl Endpoint {
 pub struct Server {
     quic: quinn::Endpoint,
     accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<web_transport::Session>>>,
+    _qlog_dir: Option<Arc<PathBuf>>,
+    _base_server_config: Arc<quinn::ServerConfig>,
 }
 
 impl Server {
