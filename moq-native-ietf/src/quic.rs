@@ -1,4 +1,4 @@
-use std::{net, sync::Arc, time};
+use std::{net, path::PathBuf, sync::Arc, time};
 
 use anyhow::Context;
 use clap::Parser;
@@ -16,6 +16,10 @@ pub struct Args {
     #[arg(long, default_value = "[::]:0")]
     pub bind: net::SocketAddr,
 
+    /// Directory to write qlog files (one per connection)
+    #[arg(long)]
+    pub qlog_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub tls: tls::Args,
 }
@@ -24,6 +28,7 @@ impl Default for Args {
     fn default() -> Self {
         Self {
             bind: "[::]:0".parse().unwrap(),
+            qlog_dir: None,
             tls: Default::default(),
         }
     }
@@ -34,6 +39,7 @@ impl Args {
         let tls = self.tls.load()?;
         Ok(Config {
             bind: self.bind,
+            qlog_dir: self.qlog_dir.clone(),
             tls,
         })
     }
@@ -41,6 +47,7 @@ impl Args {
 
 pub struct Config {
     pub bind: net::SocketAddr,
+    pub qlog_dir: Option<PathBuf>,
     pub tls: tls::Config,
 }
 

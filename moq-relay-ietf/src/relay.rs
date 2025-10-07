@@ -39,6 +39,7 @@ impl Relay {
     pub fn new(config: RelayConfig) -> anyhow::Result<Self> {
         let quic = quic::Endpoint::new(quic::Config {
             bind: config.bind,
+            qlog_dir: None, // TODO: Pass through from CLI
             tls: config.tls,
         })?;
 
