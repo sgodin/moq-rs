@@ -124,6 +124,11 @@ impl Server {
     }
 
     async fn accept_session(conn: quinn::Incoming) -> anyhow::Result<web_transport::Session> {
+        // Capture the original destination connection ID BEFORE accepting
+        // This is the actual QUIC CID that can be used for qlog correlation
+        let orig_dst_cid = conn.orig_dst_cid();
+        let connection_id_hex = orig_dst_cid.to_string();
+
         let mut conn = conn.accept()?;
 
         let handshake = conn
@@ -137,7 +142,8 @@ impl Server {
         let server_name = handshake.server_name.unwrap_or_default();
 
         log::debug!(
-            "received QUIC handshake: ip={} alpn={} server={}",
+            "received QUIC handshake: cid={} ip={} alpn={} server={}",
+            connection_id_hex,
             conn.remote_address(),
             alpn,
             server_name,
@@ -147,7 +153,8 @@ impl Server {
         let conn = conn.await.context("failed to establish QUIC connection")?;
 
         log::debug!(
-            "established QUIC connection: id={} ip={} alpn={} server={}",
+            "established QUIC connection: cid={} stable_id={} ip={} alpn={} server={}",
+            connection_id_hex,
             conn.stable_id(),
             conn.remote_address(),
             alpn,
