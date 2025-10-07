@@ -106,8 +106,8 @@ impl Endpoint {
         let server = server_config.clone().map(|base_server_config| Server {
             quic: quic.clone(),
             accept: Default::default(),
-            _qlog_dir: config.qlog_dir.map(Arc::new),
-            _base_server_config: Arc::new(base_server_config),
+            qlog_dir: config.qlog_dir.map(Arc::new),
+            base_server_config: Arc::new(base_server_config),
         });
 
         let client = Client {
@@ -123,8 +123,8 @@ impl Endpoint {
 pub struct Server {
     quic: quinn::Endpoint,
     accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<web_transport::Session>>>,
-    _qlog_dir: Option<Arc<PathBuf>>,
-    _base_server_config: Arc<quinn::ServerConfig>,
+    qlog_dir: Option<Arc<PathBuf>>,
+    base_server_config: Arc<quinn::ServerConfig>,
 }
 
 impl Server {
@@ -133,7 +133,9 @@ impl Server {
             tokio::select! {
                 res = self.quic.accept() => {
                     let conn = res?;
-                    self.accept.push(Self::accept_session(conn).boxed());
+                    let qlog_dir = self.qlog_dir.clone();
+                    let base_server_config = self.base_server_config.clone();
+                    self.accept.push(Self::accept_session(conn, qlog_dir, base_server_config).boxed());
                 }
                 res = self.accept.next(), if !self.accept.is_empty() => {
                     match res.unwrap() {
@@ -145,7 +147,11 @@ impl Server {
         }
     }
 
-    async fn accept_session(conn: quinn::Incoming) -> anyhow::Result<web_transport::Session> {
+    async fn accept_session(
+        conn: quinn::Incoming,
+        _qlog_dir: Option<Arc<PathBuf>>,
+        _base_server_config: Arc<quinn::ServerConfig>,
+    ) -> anyhow::Result<web_transport::Session> {
         // Capture the original destination connection ID BEFORE accepting
         // This is the actual QUIC CID that can be used for qlog correlation
         let orig_dst_cid = conn.orig_dst_cid();
