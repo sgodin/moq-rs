@@ -18,7 +18,7 @@ pub use remote::*;
 pub use session::*;
 pub use web::*;
 
-use std::net;
+use std::{net, path::PathBuf};
 use url::Url;
 
 #[derive(Parser, Clone)]
@@ -30,6 +30,10 @@ pub struct Cli {
     /// The TLS configuration.
     #[command(flatten)]
     pub tls: moq_native_ietf::tls::Args,
+
+    /// Directory to write qlog files (one per connection)
+    #[arg(long)]
+    pub qlog_dir: Option<PathBuf>,
 
     /// Forward all announces to the provided server for authentication/routing.
     /// If not provided, the relay accepts every unique announce.
@@ -73,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
     let relay = Relay::new(RelayConfig {
         tls: tls.clone(),
         bind: cli.bind,
+        qlog_dir: cli.qlog_dir,
         node: cli.node,
         api: cli.api,
         announce: cli.announce,

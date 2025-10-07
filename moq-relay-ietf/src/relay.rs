@@ -1,4 +1,4 @@
-use std::net;
+use std::{net, path::PathBuf};
 
 use anyhow::Context;
 
@@ -14,6 +14,9 @@ pub struct RelayConfig {
 
     /// The TLS configuration.
     pub tls: moq_native_ietf::tls::Config,
+
+    /// Directory to write qlog files (one per connection)
+    pub qlog_dir: Option<PathBuf>,
 
     /// Forward all announcements to the (optional) URL.
     pub announce: Option<Url>,
@@ -39,7 +42,7 @@ impl Relay {
     pub fn new(config: RelayConfig) -> anyhow::Result<Self> {
         let quic = quic::Endpoint::new(quic::Config {
             bind: config.bind,
-            qlog_dir: None, // TODO: Pass through from CLI
+            qlog_dir: config.qlog_dir,
             tls: config.tls,
         })?;
 
