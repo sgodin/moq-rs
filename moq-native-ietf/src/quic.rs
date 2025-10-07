@@ -58,6 +58,17 @@ pub struct Endpoint {
 
 impl Endpoint {
     pub fn new(config: Config) -> anyhow::Result<Self> {
+        // Validate qlog directory if provided
+        if let Some(qlog_dir) = &config.qlog_dir {
+            if !qlog_dir.exists() {
+                anyhow::bail!("qlog directory does not exist: {}", qlog_dir.display());
+            }
+            if !qlog_dir.is_dir() {
+                anyhow::bail!("qlog path is not a directory: {}", qlog_dir.display());
+            }
+            log::info!("qlog output enabled: {}", qlog_dir.display());
+        }
+
         // Enable BBR congestion control
         // TODO validate the implementation
         let mut transport = quinn::TransportConfig::default();
