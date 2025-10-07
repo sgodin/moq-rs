@@ -1,4 +1,4 @@
-use std::{net, path::PathBuf, sync::Arc, time};
+use std::{fs::File, io::BufWriter, net, path::PathBuf, sync::Arc, time};
 
 use anyhow::Context;
 use clap::Parser;
@@ -9,6 +9,19 @@ use crate::tls;
 use futures::future::BoxFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures::FutureExt;
+
+/// Build a TransportConfig with our standard settings
+///
+/// This is used both for the base endpoint config and when creating
+/// per-connection configs with qlog enabled.
+fn build_transport_config() -> quinn::TransportConfig {
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_idle_timeout(Some(time::Duration::from_secs(10).try_into().unwrap()));
+    transport.keep_alive_interval(Some(time::Duration::from_secs(4))); // TODO make this smarter
+    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    transport.mtu_discovery_config(None); // Disable MTU discovery
+    transport
+}
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -69,14 +82,8 @@ impl Endpoint {
             log::info!("qlog output enabled: {}", qlog_dir.display());
         }
 
-        // Enable BBR congestion control
-        // TODO validate the implementation
-        let mut transport = quinn::TransportConfig::default();
-        transport.max_idle_timeout(Some(time::Duration::from_secs(10).try_into().unwrap()));
-        transport.keep_alive_interval(Some(time::Duration::from_secs(4))); // TODO make this smarter
-        transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-        transport.mtu_discovery_config(None); // Disable MTU discovery
-        let transport = Arc::new(transport);
+        // Build transport config with our standard settings
+        let transport = Arc::new(build_transport_config());
 
         let mut server_config = None;
 
@@ -149,15 +156,46 @@ impl Server {
 
     async fn accept_session(
         conn: quinn::Incoming,
-        _qlog_dir: Option<Arc<PathBuf>>,
-        _base_server_config: Arc<quinn::ServerConfig>,
+        qlog_dir: Option<Arc<PathBuf>>,
+        base_server_config: Arc<quinn::ServerConfig>,
     ) -> anyhow::Result<web_transport::Session> {
         // Capture the original destination connection ID BEFORE accepting
         // This is the actual QUIC CID that can be used for qlog correlation
         let orig_dst_cid = conn.orig_dst_cid();
         let connection_id_hex = orig_dst_cid.to_string();
 
-        let mut conn = conn.accept()?;
+        // Configure per-connection qlog if enabled
+        let mut conn = if let Some(qlog_dir) = qlog_dir {
+            // Create qlog file path using connection ID
+            let qlog_path = qlog_dir.join(format!("{}_server.qlog", connection_id_hex));
+
+            // Create transport config with our standard settings plus qlog
+            let mut transport = build_transport_config();
+
+            let file = File::create(&qlog_path).context("failed to create qlog file")?;
+            let writer = BufWriter::new(file);
+
+            let mut qlog = quinn::QlogConfig::default();
+            qlog.writer(Box::new(writer))
+                .title(Some("moq-relay".into()));
+            transport.qlog_stream(qlog.into_stream());
+
+            // Create custom server config with qlog-enabled transport
+            let mut server_config = (*base_server_config).clone();
+            server_config.transport_config(Arc::new(transport));
+
+            log::debug!(
+                "qlog enabled: cid={} path={}",
+                connection_id_hex,
+                qlog_path.display()
+            );
+
+            // Accept with custom config
+            conn.accept_with(Arc::new(server_config))?
+        } else {
+            // No qlog - use default config
+            conn.accept()?
+        };
 
         let handshake = conn
             .handshake_data()
