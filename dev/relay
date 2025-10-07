@@ -19,6 +19,15 @@ KEY="${KEY:-dev/localhost.key}"
 PORT="${PORT:-4443}"
 BIND="${BIND:-[::]:$PORT}"
 
+# Enable qlog logging if QLOG_DIR is set
+QLOG_DIR="${QLOG_DIR:-}"
+if [ -n "$QLOG_DIR" ]; then
+	QLOG="--qlog-dir $QLOG_DIR"
+else
+	QLOG=""
+fi
+
+
 # A list of optional args
 ARGS=""
 
@@ -36,4 +45,4 @@ fi
 echo "Publish URL: https://quic.video/publish/?server=localhost:$PORT"
 
 # Run the relay and forward any arguments
-cargo run --bin moq-relay-ietf -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" --dev $ARGS -- "$@"
+cargo run --bin moq-relay-ietf -- --bind "$BIND" --tls-cert "$CERT" --tls-key "$KEY" --dev $QLOG $ARGS -- "$@"
