@@ -8,14 +8,14 @@ use std::fmt;
 pub enum StreamHeaderType {
     SubgroupZeroId = 0x10,
     SubgroupZeroIdExt = 0x11,
-    SubgroupOjbectId = 0x12,
-    SubgroupOjbectIdExt = 0x13,
+    SubgroupFirstObjectId = 0x12,
+    SubgroupFirstObjectIdExt = 0x13,
     SubgroupId = 0x14,
     SubgroupIdExt = 0x15,
     SubgroupZeroIdEndOfGroup = 0x18,
     SubgroupZeroIdExtEndOfGroup = 0x19,
-    SubgroupObjectIdEndOfGroup = 0x1a,
-    SubgroupOjbectIdExtEndOfGroup = 0x1b,
+    SubgroupFirstObjectIdEndOfGroup = 0x1a,
+    SubgroupFirstObjectIdExtEndOfGroup = 0x1b,
     SubgroupIdEndOfGroup = 0x1c,
     SubgroupIdExtEndOfGroup = 0x1d,
     Fetch = 0x5,
@@ -35,10 +35,10 @@ impl StreamHeaderType {
         matches!(
             *self,
             StreamHeaderType::SubgroupZeroIdExt
-                | StreamHeaderType::SubgroupOjbectIdExt
+                | StreamHeaderType::SubgroupFirstObjectIdExt
                 | StreamHeaderType::SubgroupIdExt
                 | StreamHeaderType::SubgroupZeroIdExtEndOfGroup
-                | StreamHeaderType::SubgroupOjbectIdExtEndOfGroup
+                | StreamHeaderType::SubgroupFirstObjectIdExtEndOfGroup
                 | StreamHeaderType::SubgroupIdExtEndOfGroup
                 | StreamHeaderType::Fetch
         )
@@ -85,14 +85,14 @@ impl Decode for StreamHeaderType {
         let header_type = match type_value {
             0x10_u64 => Ok(Self::SubgroupZeroId),
             0x11_u64 => Ok(Self::SubgroupZeroIdExt),
-            0x12_u64 => Ok(Self::SubgroupOjbectId),
-            0x13_u64 => Ok(Self::SubgroupOjbectIdExt),
+            0x12_u64 => Ok(Self::SubgroupFirstObjectId),
+            0x13_u64 => Ok(Self::SubgroupFirstObjectIdExt),
             0x14_u64 => Ok(Self::SubgroupId),
             0x15_u64 => Ok(Self::SubgroupIdExt),
             0x18_u64 => Ok(Self::SubgroupZeroIdEndOfGroup),
             0x19_u64 => Ok(Self::SubgroupZeroIdExtEndOfGroup),
-            0x1a_u64 => Ok(Self::SubgroupObjectIdEndOfGroup),
-            0x1b_u64 => Ok(Self::SubgroupOjbectIdExtEndOfGroup),
+            0x1a_u64 => Ok(Self::SubgroupFirstObjectIdEndOfGroup),
+            0x1b_u64 => Ok(Self::SubgroupFirstObjectIdExtEndOfGroup),
             0x1c_u64 => Ok(Self::SubgroupIdEndOfGroup),
             0x1d_u64 => Ok(Self::SubgroupIdExtEndOfGroup),
             0x05_u64 => Ok(Self::Fetch),

@@ -178,7 +178,7 @@ impl Publisher {
             response = message::TrackStatusOk {
                 id: track_status_request.request_msg.id,
                 track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 3600,  // TODO SLG
+                expires: 0,     // TODO SLG
                 group_order: GroupOrder::Ascending, // TODO SLG
                 content_exists: true,
                 largest_location: Some(latest),
@@ -188,7 +188,7 @@ impl Publisher {
             response = message::TrackStatusOk {
                 id: track_status_request.request_msg.id,
                 track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 3600,  // TODO SLG
+                expires: 0,     // TODO SLG
                 group_order: GroupOrder::Ascending, // TODO SLG
                 content_exists: false,
                 largest_location: None,
