@@ -8,6 +8,7 @@ pub mod coding;
 pub mod data;
 pub mod error;
 pub mod message;
+pub mod mlog;
 pub mod serve;
 pub mod session;
 pub mod setup;
