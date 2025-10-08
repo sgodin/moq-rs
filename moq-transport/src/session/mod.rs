@@ -116,12 +116,12 @@ impl Session {
 
         log::debug!("sending CLIENT_SETUP: {:?}", client);
         sender.encode(&client).await?;
-        
+
         // TODO: emit client_setup_created event when we add that
 
         let server: setup::Server = recver.decode().await?;
         log::debug!("received SERVER_SETUP: {:?}", server);
-        
+
         // TODO: emit server_setup_parsed event
 
         // We are the client, so the first request id is 0
@@ -146,7 +146,7 @@ impl Session {
 
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
-        
+
         // Emit mlog event for CLIENT_SETUP parsed
         if let Some(ref mut mlog) = mlog {
             let event = mlog::events::client_setup_parsed(mlog.elapsed_ms(), 0, &client);
@@ -168,13 +168,13 @@ impl Session {
             };
 
             log::debug!("sending SERVER_SETUP: {:?}", server);
-            
+
             // Emit mlog event for SERVER_SETUP created
             if let Some(ref mut mlog) = mlog {
                 let event = mlog::events::server_setup_created(mlog.elapsed_ms(), 0, &server);
                 let _ = mlog.add_event(event);
             }
-            
+
             sender.encode(&server).await?;
 
             // We are the server, so the first request id is 1

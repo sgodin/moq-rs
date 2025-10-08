@@ -17,9 +17,9 @@ impl MlogWriter {
     pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
-        
+
         let start_time = Instant::now();
-        
+
         // Write qlog-compatible header as first record
         // This follows qlog JSON-SEQ format (RFC 7464)
         let header = serde_json::json!({
@@ -36,22 +36,19 @@ impl MlogWriter {
                 ]
             }
         });
-        
+
         serde_json::to_writer(&mut writer, &header)?;
         writer.write_all(b"\n")?;
         writer.flush()?;
-        
-        Ok(Self {
-            writer,
-            start_time,
-        })
+
+        Ok(Self { writer, start_time })
     }
-    
+
     /// Get elapsed time in milliseconds since connection start
     pub fn elapsed_ms(&self) -> f64 {
         self.start_time.elapsed().as_secs_f64() * 1000.0
     }
-    
+
     /// Add an event to the log
     pub fn add_event(&mut self, event: Event) -> io::Result<()> {
         serde_json::to_writer(&mut self.writer, &event)?;
@@ -59,7 +56,7 @@ impl MlogWriter {
         self.writer.flush()?;
         Ok(())
     }
-    
+
     /// Flush and close the log
     pub fn finish(mut self) -> io::Result<()> {
         self.writer.flush()
