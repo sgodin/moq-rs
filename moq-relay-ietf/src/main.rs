@@ -35,6 +35,10 @@ pub struct Cli {
     #[arg(long)]
     pub qlog_dir: Option<PathBuf>,
 
+    /// Directory to write mlog files (one per connection)
+    #[arg(long)]
+    pub mlog_dir: Option<PathBuf>,
+
     /// Forward all announces to the provided server for authentication/routing.
     /// If not provided, the relay accepts every unique announce.
     #[arg(long)]
@@ -91,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
         tls: tls.clone(),
         bind: cli.bind,
         qlog_dir: qlog_dir_for_relay,
+        mlog_dir: cli.mlog_dir.clone(),
         node: cli.node,
         api: cli.api,
         announce: cli.announce,

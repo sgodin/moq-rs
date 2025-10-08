@@ -9,10 +9,10 @@ use crate::setup;
 pub struct Event {
     /// Time in milliseconds since connection start
     pub time: f64,
-    
+
     /// Event name in format "moqt:event_name"
     pub name: String,
-    
+
     /// Event-specific data
     pub data: EventData,
 }
@@ -23,7 +23,7 @@ pub struct Event {
 pub enum EventData {
     #[serde(rename = "control_message_parsed")]
     ControlMessageParsed(ControlMessageParsed),
-    
+
     #[serde(rename = "control_message_created")]
     ControlMessageCreated(ControlMessageCreated),
 }
@@ -34,7 +34,7 @@ pub enum EventData {
 pub struct ControlMessageParsed {
     pub stream_id: u64,
     pub message_type: String,
-    
+
     /// Message-specific fields
     #[serde(flatten)]
     pub message: JsonValue,
@@ -46,7 +46,7 @@ pub struct ControlMessageParsed {
 pub struct ControlMessageCreated {
     pub stream_id: u64,
     pub message_type: String,
-    
+
     /// Message-specific fields
     #[serde(flatten)]
     pub message: JsonValue,
@@ -57,7 +57,7 @@ pub struct ControlMessageCreated {
 /// Create a control_message_parsed event for CLIENT_SETUP
 pub fn client_setup_parsed(time: f64, stream_id: u64, msg: &setup::Client) -> Event {
     let versions: Vec<String> = msg.versions.0.iter().map(|v| format!("{:?}", v)).collect();
-    
+
     Event {
         time,
         name: "moqt:control_message_parsed".to_string(),

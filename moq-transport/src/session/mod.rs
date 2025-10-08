@@ -26,8 +26,10 @@ use std::sync::{atomic, Arc};
 
 use crate::coding::KeyValuePairs;
 use crate::message::Message;
+use crate::mlog;
 use crate::watch::Queue;
 use crate::{message, setup};
+use std::path::PathBuf;
 
 /// Session object for managing all communications in a single QUIC connection.
 #[must_use = "run() must be called"]
@@ -43,6 +45,9 @@ pub struct Session {
 
     /// Queue used by Publisher and Subscriber for sending Control Messages
     outgoing: Queue<Message>,
+
+    /// Optional mlog writer for MoQ Transport events
+    mlog: Option<mlog::MlogWriter>,
 }
 
 impl Session {
@@ -59,6 +64,7 @@ impl Session {
         sender: Writer,
         recver: Reader,
         first_requestid: u64,
+        mlog: Option<mlog::MlogWriter>,
     ) -> (Self, Option<Publisher>, Option<Subscriber>) {
         let next_requestid = Arc::new(atomic::AtomicU64::new(first_requestid));
         let outgoing = Queue::default().split();
@@ -76,6 +82,7 @@ impl Session {
             publisher: publisher.clone(),
             subscriber: subscriber.clone(),
             outgoing: outgoing.1,
+            mlog,
         };
 
         (session, publisher, subscriber)
@@ -85,7 +92,13 @@ impl Session {
     /// MOQT control messaging.  Performs SETUP messaging and version negotiation.
     pub async fn connect(
         mut session: web_transport::Session,
+        mlog_path: Option<PathBuf>,
     ) -> Result<(Session, Publisher, Subscriber), SessionError> {
+        let mlog = mlog_path.and_then(|path| {
+            mlog::MlogWriter::new(path)
+                .map_err(|e| log::warn!("Failed to create mlog: {}", e))
+                .ok()
+        });
         let control = session.open_bi().await?;
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
@@ -103,12 +116,16 @@ impl Session {
 
         log::debug!("sending CLIENT_SETUP: {:?}", client);
         sender.encode(&client).await?;
+        
+        // TODO: emit client_setup_created event when we add that
 
         let server: setup::Server = recver.decode().await?;
         log::debug!("received SERVER_SETUP: {:?}", server);
+        
+        // TODO: emit server_setup_parsed event
 
         // We are the client, so the first request id is 0
-        let session = Session::new(session, sender, recver, 0);
+        let session = Session::new(session, sender, recver, 0, mlog);
         Ok((session.0, session.1.unwrap(), session.2.unwrap()))
     }
 
@@ -116,13 +133,25 @@ impl Session {
     /// MOQT control messaging.  Performs SETUP messaging and version negotiation.
     pub async fn accept(
         mut session: web_transport::Session,
+        mlog_path: Option<PathBuf>,
     ) -> Result<(Session, Option<Publisher>, Option<Subscriber>), SessionError> {
+        let mut mlog = mlog_path.and_then(|path| {
+            mlog::MlogWriter::new(path)
+                .map_err(|e| log::warn!("Failed to create mlog: {}", e))
+                .ok()
+        });
         let control = session.accept_bi().await?;
         let mut sender = Writer::new(control.0);
         let mut recver = Reader::new(control.1);
 
         let client: setup::Client = recver.decode().await?;
         log::debug!("received CLIENT_SETUP: {:?}", client);
+        
+        // Emit mlog event for CLIENT_SETUP parsed
+        if let Some(ref mut mlog) = mlog {
+            let event = mlog::events::client_setup_parsed(mlog.elapsed_ms(), 0, &client);
+            let _ = mlog.add_event(event);
+        }
 
         let server_versions = setup::Versions(vec![setup::Version::DRAFT_14]);
 
@@ -139,10 +168,17 @@ impl Session {
             };
 
             log::debug!("sending SERVER_SETUP: {:?}", server);
+            
+            // Emit mlog event for SERVER_SETUP created
+            if let Some(ref mut mlog) = mlog {
+                let event = mlog::events::server_setup_created(mlog.elapsed_ms(), 0, &server);
+                let _ = mlog.add_event(event);
+            }
+            
             sender.encode(&server).await?;
 
             // We are the server, so the first request id is 1
-            Ok(Session::new(session, sender, recver, 1))
+            Ok(Session::new(session, sender, recver, 1, mlog))
         } else {
             Err(SessionError::Version(client.versions, server_versions))
         }

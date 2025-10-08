@@ -47,12 +47,12 @@ impl Subscriber {
     }
 
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) = Session::accept(session).await?;
+        let (session, _, subscriber) = Session::accept(session, None).await?;
         Ok((session, subscriber.unwrap()))
     }
 
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) = Session::connect(session).await?;
+        let (session, _, subscriber) = Session::connect(session, None).await?;
         Ok((session, subscriber))
     }
 

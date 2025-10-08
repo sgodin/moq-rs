@@ -33,6 +33,10 @@ pub struct Args {
     #[arg(long)]
     pub qlog_dir: Option<PathBuf>,
 
+    /// Directory to write mlog files (one per connection)
+    #[arg(long)]
+    pub mlog_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub tls: tls::Args,
 }
@@ -42,6 +46,7 @@ impl Default for Args {
         Self {
             bind: "[::]:0".parse().unwrap(),
             qlog_dir: None,
+            mlog_dir: None,
             tls: Default::default(),
         }
     }
@@ -53,6 +58,7 @@ impl Args {
         Ok(Config {
             bind: self.bind,
             qlog_dir: self.qlog_dir.clone(),
+            mlog_dir: self.mlog_dir.clone(),
             tls,
         })
     }
@@ -61,6 +67,7 @@ impl Args {
 pub struct Config {
     pub bind: net::SocketAddr,
     pub qlog_dir: Option<PathBuf>,
+    pub mlog_dir: Option<PathBuf>,
     pub tls: tls::Config,
 }
 
@@ -80,6 +87,17 @@ impl Endpoint {
                 anyhow::bail!("qlog path is not a directory: {}", qlog_dir.display());
             }
             log::info!("qlog output enabled: {}", qlog_dir.display());
+        }
+
+        // Validate mlog directory if provided
+        if let Some(mlog_dir) = &config.mlog_dir {
+            if !mlog_dir.exists() {
+                anyhow::bail!("mlog directory does not exist: {}", mlog_dir.display());
+            }
+            if !mlog_dir.is_dir() {
+                anyhow::bail!("mlog path is not a directory: {}", mlog_dir.display());
+            }
+            log::info!("mlog output enabled: {}", mlog_dir.display());
         }
 
         // Build transport config with our standard settings
@@ -114,6 +132,7 @@ impl Endpoint {
             quic: quic.clone(),
             accept: Default::default(),
             qlog_dir: config.qlog_dir.map(Arc::new),
+            mlog_dir: config.mlog_dir.map(Arc::new),
             base_server_config: Arc::new(base_server_config),
         });
 
@@ -129,24 +148,28 @@ impl Endpoint {
 
 pub struct Server {
     quic: quinn::Endpoint,
-    accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<web_transport::Session>>>,
+    accept: FuturesUnordered<
+        BoxFuture<'static, anyhow::Result<(web_transport::Session, Option<PathBuf>)>>,
+    >,
     qlog_dir: Option<Arc<PathBuf>>,
+    mlog_dir: Option<Arc<PathBuf>>,
     base_server_config: Arc<quinn::ServerConfig>,
 }
 
 impl Server {
-    pub async fn accept(&mut self) -> Option<web_transport::Session> {
+    pub async fn accept(&mut self) -> Option<(web_transport::Session, Option<PathBuf>)> {
         loop {
             tokio::select! {
                 res = self.quic.accept() => {
                     let conn = res?;
                     let qlog_dir = self.qlog_dir.clone();
+                    let mlog_dir = self.mlog_dir.clone();
                     let base_server_config = self.base_server_config.clone();
-                    self.accept.push(Self::accept_session(conn, qlog_dir, base_server_config).boxed());
-                }
+                    self.accept.push(Self::accept_session(conn, qlog_dir, mlog_dir, base_server_config).boxed());
+                },
                 res = self.accept.next(), if !self.accept.is_empty() => {
-                    match res.unwrap() {
-                        Ok(session) => return Some(session),
+                    match res? {
+                        Ok(result) => return Some(result),
                         Err(err) => log::warn!("failed to accept QUIC connection: {}", err),
                     }
                 }
@@ -157,12 +180,18 @@ impl Server {
     async fn accept_session(
         conn: quinn::Incoming,
         qlog_dir: Option<Arc<PathBuf>>,
+        mlog_dir: Option<Arc<PathBuf>>,
         base_server_config: Arc<quinn::ServerConfig>,
-    ) -> anyhow::Result<web_transport::Session> {
+    ) -> anyhow::Result<(web_transport::Session, Option<PathBuf>)> {
         // Capture the original destination connection ID BEFORE accepting
-        // This is the actual QUIC CID that can be used for qlog correlation
+        // This is the actual QUIC CID that can be used for qlog/mlog correlation
         let orig_dst_cid = conn.orig_dst_cid();
         let connection_id_hex = orig_dst_cid.to_string();
+
+        // Create mlog path if mlog directory is configured
+        let mlog_path = mlog_dir
+            .as_ref()
+            .map(|dir| dir.join(format!("{}_server.mlog", connection_id_hex)));
 
         // Configure per-connection qlog if enabled
         let mut conn = if let Some(qlog_dir) = qlog_dir {
@@ -245,7 +274,7 @@ impl Server {
             _ => anyhow::bail!("unsupported ALPN: {}", alpn),
         };
 
-        Ok(session.into())
+        Ok((session.into(), mlog_path))
     }
 
     pub fn local_addr(&self) -> anyhow::Result<net::SocketAddr> {

@@ -25,6 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let quic = quic::Endpoint::new(quic::Config {
         bind: config.bind,
         qlog_dir: None,
+        mlog_dir: None,
         tls,
     })?;
 

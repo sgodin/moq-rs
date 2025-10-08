@@ -64,14 +64,14 @@ impl Publisher {
     pub async fn accept(
         session: web_transport::Session,
     ) -> Result<(Session, Publisher), SessionError> {
-        let (session, publisher, _) = Session::accept(session).await?;
+        let (session, publisher, _) = Session::accept(session, None).await?;
         Ok((session, publisher.unwrap()))
     }
 
     pub async fn connect(
         session: web_transport::Session,
     ) -> Result<(Session, Publisher), SessionError> {
-        let (session, publisher, _) = Session::connect(session).await?;
+        let (session, publisher, _) = Session::connect(session, None).await?;
         Ok((session, publisher))
     }
 
