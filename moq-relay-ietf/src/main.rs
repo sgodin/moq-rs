@@ -18,7 +18,7 @@ pub use remote::*;
 pub use session::*;
 pub use web::*;
 
-use std::net;
+use std::{net, path::PathBuf};
 use url::Url;
 
 #[derive(Parser, Clone)]
@@ -30,6 +30,10 @@ pub struct Cli {
     /// The TLS configuration.
     #[command(flatten)]
     pub tls: moq_native_ietf::tls::Args,
+
+    /// Directory to write qlog files (one per connection)
+    #[arg(long)]
+    pub qlog_dir: Option<PathBuf>,
 
     /// Forward all announces to the provided server for authentication/routing.
     /// If not provided, the relay accepts every unique announce.
@@ -50,6 +54,11 @@ pub struct Cli {
     /// This hosts a HTTPS web server via TCP to serve the fingerprint of the certificate.
     #[arg(long)]
     pub dev: bool,
+
+    /// Serve qlog files over HTTPS at /qlog/:cid
+    /// Requires --dev to enable the web server. Only serves files by exact CID - no index.
+    #[arg(long)]
+    pub qlog_serve: bool,
 }
 
 #[tokio::main]
@@ -69,10 +78,19 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("missing TLS certificates");
     }
 
+    // Determine qlog directory for both relay and web server
+    let qlog_dir_for_relay = cli.qlog_dir.clone();
+    let qlog_dir_for_web = if cli.qlog_serve {
+        cli.qlog_dir.clone()
+    } else {
+        None
+    };
+
     // Create a QUIC server for media.
     let relay = Relay::new(RelayConfig {
         tls: tls.clone(),
         bind: cli.bind,
+        qlog_dir: qlog_dir_for_relay,
         node: cli.node,
         api: cli.api,
         announce: cli.announce,
@@ -84,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
         let web = Web::new(WebConfig {
             bind: cli.bind,
             tls,
+            qlog_dir: qlog_dir_for_web,
         });
 
         tokio::spawn(async move {

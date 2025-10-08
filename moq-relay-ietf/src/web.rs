@@ -1,12 +1,25 @@
-use std::{net, sync::Arc};
+use std::{net, path::PathBuf, sync::Arc};
 
-use axum::{extract::State, http::Method, response::IntoResponse, routing::get, Router};
+use axum::{
+    extract::{Path, State},
+    http::{Method, StatusCode},
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
 use hyper_serve::tls_rustls::RustlsAcceptor;
 use tower_http::cors::{Any, CorsLayer};
 
 pub struct WebConfig {
     pub bind: net::SocketAddr,
     pub tls: moq_native_ietf::tls::Config,
+    pub qlog_dir: Option<PathBuf>,
+}
+
+#[derive(Clone)]
+struct WebState {
+    fingerprint: String,
+    qlog_dir: Option<Arc<PathBuf>>,
 }
 
 // Run a HTTP server using Axum
@@ -31,14 +44,27 @@ impl Web {
         tls.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         let tls = hyper_serve::tls_rustls::RustlsConfig::from_config(Arc::new(tls));
 
-        let app = Router::new()
-            .route("/fingerprint", get(serve_fingerprint))
-            .layer(
-                CorsLayer::new()
-                    .allow_origin(Any)
-                    .allow_methods([Method::GET]),
-            )
-            .with_state(fingerprint);
+        // Create shared state
+        let state = WebState {
+            fingerprint,
+            qlog_dir: config.qlog_dir.map(Arc::new),
+        };
+
+        // Build router with fingerprint endpoint
+        let mut app = Router::new().route("/fingerprint", get(serve_fingerprint));
+
+        // Optionally add qlog serving endpoint
+        if state.qlog_dir.is_some() {
+            app = app.route("/qlog/:cid", get(serve_qlog));
+            log::info!("qlog files available at /qlog/:cid");
+        }
+
+        // Add state and CORS layer
+        let app = app.with_state(state).layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::GET]),
+        );
 
         let server = hyper_serve::bind_rustls(config.bind, tls);
 
@@ -51,6 +77,50 @@ impl Web {
     }
 }
 
-async fn serve_fingerprint(State(fingerprint): State<String>) -> impl IntoResponse {
-    fingerprint
+async fn serve_fingerprint(State(state): State<WebState>) -> impl IntoResponse {
+    state.fingerprint
+}
+async fn serve_qlog(
+    Path(cid): Path<String>,
+    State(state): State<WebState>,
+) -> Result<Vec<u8>, (StatusCode, String)> {
+    // Get qlog directory or return 404
+    let qlog_dir = state.qlog_dir.as_ref().ok_or((
+        StatusCode::NOT_FOUND,
+        "Qlog serving not enabled".to_string(),
+    ))?;
+
+    // Strip _server.qlog suffix if present to get the base CID
+    let base_cid = cid.strip_suffix("_server.qlog").unwrap_or(&cid);
+
+    // Construct the expected filename
+    let filename = format!("{}_server.qlog", base_cid);
+    let file_path = qlog_dir.join(&filename);
+
+    // Security: Ensure the path is still within qlog_dir (prevent path traversal)
+    let canonical_dir = qlog_dir.canonicalize().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Invalid qlog directory: {}", e),
+        )
+    })?;
+
+    let canonical_file = file_path.canonicalize().map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Qlog file not found: {}", filename),
+        )
+    })?;
+
+    if !canonical_file.starts_with(&canonical_dir) {
+        return Err((StatusCode::FORBIDDEN, "Invalid path".to_string()));
+    }
+
+    // Read and return the file
+    tokio::fs::read(&canonical_file).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Failed to read qlog file: {}", e),
+        )
+    })
 }

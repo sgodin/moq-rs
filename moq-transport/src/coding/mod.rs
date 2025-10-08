@@ -1,6 +1,7 @@
 mod bounded_string;
 mod decode;
 mod encode;
+mod hex_dump;
 mod integer;
 mod kvp;
 mod location;
@@ -12,6 +13,7 @@ mod varint;
 pub use bounded_string::*;
 pub use decode::*;
 pub use encode::*;
+pub use hex_dump::*;
 pub use kvp::*;
 pub use location::*;
 pub use track_namespace::*;

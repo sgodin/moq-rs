@@ -226,17 +226,33 @@ impl Subscribed {
         mut publisher: Publisher,
         state: State<SubscribedState>,
     ) -> Result<(), SessionError> {
+        log::debug!(
+            "[PUBLISHER] serve_subgroup: starting - group_id={}, subgroup_id={:?}, priority={}",
+            subgroup_reader.group_id,
+            subgroup_reader.subgroup_id,
+            subgroup_reader.priority
+        );
+
         let mut send_stream = publisher.open_uni().await?;
+        log::trace!("[PUBLISHER] serve_subgroup: opened unidirectional stream");
 
         // TODO figure out u32 vs u64 priority
         send_stream.set_priority(subgroup_reader.priority as i32);
 
         let mut writer = Writer::new(send_stream);
 
-        log::trace!("sending subgroup header: {:?}", header);
+        log::debug!(
+            "[PUBLISHER] serve_subgroup: sending header - track_alias={}, group_id={}, subgroup_id={:?}, priority={}, header_type={:?}",
+            header.track_alias,
+            header.group_id,
+            header.subgroup_id,
+            header.publisher_priority,
+            header.header_type
+        );
 
         writer.encode(&header).await?;
 
+        let mut object_count = 0;
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
             let subgroup_object = data::SubgroupObject {
                 object_id_delta: 0, // before delta logic, used to be subgroup_object_reader.object_id,
@@ -249,6 +265,15 @@ impl Subscribed {
                 },
             };
 
+            log::debug!(
+                "[PUBLISHER] serve_subgroup: sending object #{} - object_id={}, object_id_delta={}, payload_length={}, status={:?}",
+                object_count + 1,
+                subgroup_object_reader.object_id,
+                subgroup_object.object_id_delta,
+                subgroup_object.payload_length,
+                subgroup_object.status
+            );
+
             writer.encode(&subgroup_object).await?;
 
             state
@@ -259,16 +284,35 @@ impl Subscribed {
                     subgroup_object_reader.object_id,
                 )?;
 
-            log::trace!("sent subgroup object: {:?}", subgroup_object);
-
+            let mut chunks_sent = 0;
+            let mut bytes_sent = 0;
             while let Some(chunk) = subgroup_object_reader.read().await? {
+                log::trace!(
+                    "[PUBLISHER] serve_subgroup: sending payload chunk #{} for object #{} ({} bytes)",
+                    chunks_sent + 1,
+                    object_count + 1,
+                    chunk.len()
+                );
+                bytes_sent += chunk.len();
                 writer.write(&chunk).await?;
-                // payload length already logged when subgroup object is logged
-                //log::trace!("sent group payload len: {:?}", chunk.len());
+                chunks_sent += 1;
             }
 
-            //log::trace!("sent subgroup done");
+            log::trace!(
+                "[PUBLISHER] serve_subgroup: completed object #{} ({} chunks, {} bytes total)",
+                object_count + 1,
+                chunks_sent,
+                bytes_sent
+            );
+            object_count += 1;
         }
+
+        log::info!(
+            "[PUBLISHER] serve_subgroup: completed subgroup (group_id={}, subgroup_id={:?}, {} objects sent)",
+            subgroup_reader.group_id,
+            subgroup_reader.subgroup_id,
+            object_count
+        );
 
         Ok(())
     }
@@ -277,8 +321,11 @@ impl Subscribed {
         &mut self,
         mut datagrams: serve::DatagramsReader,
     ) -> Result<(), SessionError> {
+        log::debug!("[PUBLISHER] serve_datagrams: starting");
+
+        let mut datagram_count = 0;
         while let Some(datagram) = datagrams.read().await? {
-            let datagram = data::Datagram {
+            let encoded_datagram = data::Datagram {
                 datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
                 track_alias: self.msg.id, //  TODO SLG - use subscription id for now
                 group_id: datagram.group_id,
@@ -289,19 +336,42 @@ impl Subscribed {
                 payload: Some(datagram.payload),
             };
 
-            let mut buffer =
-                bytes::BytesMut::with_capacity(datagram.payload.as_ref().unwrap().len() + 100);
-            datagram.encode(&mut buffer)?;
+            let payload_len = encoded_datagram
+                .payload
+                .as_ref()
+                .map(|p| p.len())
+                .unwrap_or(0);
+            let mut buffer = bytes::BytesMut::with_capacity(payload_len + 100);
+            encoded_datagram.encode(&mut buffer)?;
+
+            log::debug!(
+                "[PUBLISHER] serve_datagrams: sending datagram #{} - group_id={}, object_id={}, priority={}, payload_len={}, total_encoded_len={}",
+                datagram_count + 1,
+                encoded_datagram.group_id,
+                encoded_datagram.object_id.unwrap(),
+                encoded_datagram.publisher_priority,
+                payload_len,
+                buffer.len()
+            );
 
             self.publisher.send_datagram(buffer.into()).await?;
-            log::trace!("sent datagram: {:?}", datagram);
 
             self.state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
-                .update_largest_location(datagram.group_id, datagram.object_id.unwrap())?;
+                .update_largest_location(
+                    encoded_datagram.group_id,
+                    encoded_datagram.object_id.unwrap(),
+                )?;
             // TODO SLG - fix up safety of unwrap()
+
+            datagram_count += 1;
         }
+
+        log::info!(
+            "[PUBLISHER] serve_datagrams: completed ({} datagrams sent)",
+            datagram_count
+        );
 
         Ok(())
     }

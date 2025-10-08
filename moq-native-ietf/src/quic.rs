@@ -1,4 +1,4 @@
-use std::{net, sync::Arc, time};
+use std::{fs::File, io::BufWriter, net, path::PathBuf, sync::Arc, time};
 
 use anyhow::Context;
 use clap::Parser;
@@ -10,11 +10,28 @@ use futures::future::BoxFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures::FutureExt;
 
+/// Build a TransportConfig with our standard settings
+///
+/// This is used both for the base endpoint config and when creating
+/// per-connection configs with qlog enabled.
+fn build_transport_config() -> quinn::TransportConfig {
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_idle_timeout(Some(time::Duration::from_secs(10).try_into().unwrap()));
+    transport.keep_alive_interval(Some(time::Duration::from_secs(4))); // TODO make this smarter
+    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    transport.mtu_discovery_config(None); // Disable MTU discovery
+    transport
+}
+
 #[derive(Parser, Clone)]
 pub struct Args {
     /// Listen for UDP packets on the given address.
     #[arg(long, default_value = "[::]:0")]
     pub bind: net::SocketAddr,
+
+    /// Directory to write qlog files (one per connection)
+    #[arg(long)]
+    pub qlog_dir: Option<PathBuf>,
 
     #[command(flatten)]
     pub tls: tls::Args,
@@ -24,6 +41,7 @@ impl Default for Args {
     fn default() -> Self {
         Self {
             bind: "[::]:0".parse().unwrap(),
+            qlog_dir: None,
             tls: Default::default(),
         }
     }
@@ -34,6 +52,7 @@ impl Args {
         let tls = self.tls.load()?;
         Ok(Config {
             bind: self.bind,
+            qlog_dir: self.qlog_dir.clone(),
             tls,
         })
     }
@@ -41,6 +60,7 @@ impl Args {
 
 pub struct Config {
     pub bind: net::SocketAddr,
+    pub qlog_dir: Option<PathBuf>,
     pub tls: tls::Config,
 }
 
@@ -51,14 +71,19 @@ pub struct Endpoint {
 
 impl Endpoint {
     pub fn new(config: Config) -> anyhow::Result<Self> {
-        // Enable BBR congestion control
-        // TODO validate the implementation
-        let mut transport = quinn::TransportConfig::default();
-        transport.max_idle_timeout(Some(time::Duration::from_secs(10).try_into().unwrap()));
-        transport.keep_alive_interval(Some(time::Duration::from_secs(4))); // TODO make this smarter
-        transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-        transport.mtu_discovery_config(None); // Disable MTU discovery
-        let transport = Arc::new(transport);
+        // Validate qlog directory if provided
+        if let Some(qlog_dir) = &config.qlog_dir {
+            if !qlog_dir.exists() {
+                anyhow::bail!("qlog directory does not exist: {}", qlog_dir.display());
+            }
+            if !qlog_dir.is_dir() {
+                anyhow::bail!("qlog path is not a directory: {}", qlog_dir.display());
+            }
+            log::info!("qlog output enabled: {}", qlog_dir.display());
+        }
+
+        // Build transport config with our standard settings
+        let transport = Arc::new(build_transport_config());
 
         let mut server_config = None;
 
@@ -85,9 +110,11 @@ impl Endpoint {
         let quic = quinn::Endpoint::new(endpoint_config, server_config.clone(), socket, runtime)
             .context("failed to create QUIC endpoint")?;
 
-        let server = server_config.is_some().then(|| Server {
+        let server = server_config.clone().map(|base_server_config| Server {
             quic: quic.clone(),
             accept: Default::default(),
+            qlog_dir: config.qlog_dir.map(Arc::new),
+            base_server_config: Arc::new(base_server_config),
         });
 
         let client = Client {
@@ -103,6 +130,8 @@ impl Endpoint {
 pub struct Server {
     quic: quinn::Endpoint,
     accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<web_transport::Session>>>,
+    qlog_dir: Option<Arc<PathBuf>>,
+    base_server_config: Arc<quinn::ServerConfig>,
 }
 
 impl Server {
@@ -111,7 +140,9 @@ impl Server {
             tokio::select! {
                 res = self.quic.accept() => {
                     let conn = res?;
-                    self.accept.push(Self::accept_session(conn).boxed());
+                    let qlog_dir = self.qlog_dir.clone();
+                    let base_server_config = self.base_server_config.clone();
+                    self.accept.push(Self::accept_session(conn, qlog_dir, base_server_config).boxed());
                 }
                 res = self.accept.next(), if !self.accept.is_empty() => {
                     match res.unwrap() {
@@ -123,8 +154,48 @@ impl Server {
         }
     }
 
-    async fn accept_session(conn: quinn::Incoming) -> anyhow::Result<web_transport::Session> {
-        let mut conn = conn.accept()?;
+    async fn accept_session(
+        conn: quinn::Incoming,
+        qlog_dir: Option<Arc<PathBuf>>,
+        base_server_config: Arc<quinn::ServerConfig>,
+    ) -> anyhow::Result<web_transport::Session> {
+        // Capture the original destination connection ID BEFORE accepting
+        // This is the actual QUIC CID that can be used for qlog correlation
+        let orig_dst_cid = conn.orig_dst_cid();
+        let connection_id_hex = orig_dst_cid.to_string();
+
+        // Configure per-connection qlog if enabled
+        let mut conn = if let Some(qlog_dir) = qlog_dir {
+            // Create qlog file path using connection ID
+            let qlog_path = qlog_dir.join(format!("{}_server.qlog", connection_id_hex));
+
+            // Create transport config with our standard settings plus qlog
+            let mut transport = build_transport_config();
+
+            let file = File::create(&qlog_path).context("failed to create qlog file")?;
+            let writer = BufWriter::new(file);
+
+            let mut qlog = quinn::QlogConfig::default();
+            qlog.writer(Box::new(writer))
+                .title(Some("moq-relay".into()));
+            transport.qlog_stream(qlog.into_stream());
+
+            // Create custom server config with qlog-enabled transport
+            let mut server_config = (*base_server_config).clone();
+            server_config.transport_config(Arc::new(transport));
+
+            log::debug!(
+                "qlog enabled: cid={} path={}",
+                connection_id_hex,
+                qlog_path.display()
+            );
+
+            // Accept with custom config
+            conn.accept_with(Arc::new(server_config))?
+        } else {
+            // No qlog - use default config
+            conn.accept()?
+        };
 
         let handshake = conn
             .handshake_data()
@@ -137,7 +208,8 @@ impl Server {
         let server_name = handshake.server_name.unwrap_or_default();
 
         log::debug!(
-            "received QUIC handshake: ip={} alpn={} server={}",
+            "received QUIC handshake: cid={} ip={} alpn={} server={}",
+            connection_id_hex,
             conn.remote_address(),
             alpn,
             server_name,
@@ -147,7 +219,8 @@ impl Server {
         let conn = conn.await.context("failed to establish QUIC connection")?;
 
         log::debug!(
-            "established QUIC connection: id={} ip={} alpn={} server={}",
+            "established QUIC connection: cid={} stable_id={} ip={} alpn={} server={}",
+            connection_id_hex,
             conn.stable_id(),
             conn.remote_address(),
             alpn,

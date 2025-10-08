@@ -24,6 +24,7 @@ async fn main() -> anyhow::Result<()> {
     let tls = config.tls.load()?;
     let quic = quic::Endpoint::new(quic::Config {
         bind: config.bind,
+        qlog_dir: None,
         tls,
     })?;
 

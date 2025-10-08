@@ -19,7 +19,7 @@ web-transport-quinn = "0.3"
 rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 rustls-native-certs = "0.7"
-quinn = { version = "0.11", features = ["ring"] }
+quinn = { version = "0.11.9", features = ["ring", "qlog"] }
 ring = "0.17"
 webpki = "0.22"
 

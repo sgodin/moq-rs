@@ -183,17 +183,31 @@ impl Subscriber {
         mut self,
         stream: web_transport::RecvStream,
     ) -> Result<(), SessionError> {
+        log::trace!("[SUBSCRIBER] recv_stream: new stream received, decoding header");
         let mut reader = Reader::new(stream);
 
         // Decode the stream header
         let stream_header: data::StreamHeader = reader.decode().await?;
+        log::debug!(
+            "[SUBSCRIBER] recv_stream: decoded stream header type={:?}",
+            stream_header.header_type
+        );
 
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
+        log::trace!(
+            "[SUBSCRIBER] recv_stream: stream for subscription id={}",
+            id
+        );
 
         let res = self.recv_stream_inner(reader, stream_header).await;
         if let Err(SessionError::Serve(err)) = &res {
+            log::warn!(
+                "[SUBSCRIBER] recv_stream: stream processing error for id={}: {:?}",
+                id,
+                err
+            );
             // The writer is closed, so we should teriminate.
             // TODO it would be nice to do this immediately when the Writer is closed.
             if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&id) {
@@ -212,6 +226,10 @@ impl Subscriber {
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
+        log::trace!(
+            "[SUBSCRIBER] recv_stream_inner: processing stream for id={}",
+            id
+        );
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
         enum Writer {
@@ -221,9 +239,16 @@ impl Subscriber {
 
         let writer = {
             let mut subscribes = self.subscribes.lock().unwrap();
-            let subscribe = subscribes.get_mut(&id).ok_or(ServeError::NotFound)?;
+            let subscribe = subscribes.get_mut(&id).ok_or_else(|| {
+                log::error!(
+                    "[SUBSCRIBER] recv_stream_inner: subscription id={} not found",
+                    id
+                );
+                ServeError::NotFound
+            })?;
 
             if stream_header.header_type.is_subgroup() {
+                log::trace!("[SUBSCRIBER] recv_stream_inner: creating subgroup writer");
                 Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
             } else {
                 panic!("Fetch not implemented yet!")
@@ -233,10 +258,15 @@ impl Subscriber {
         match writer {
             //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
             Writer::Subgroup(subgroup) => {
+                log::trace!("[SUBSCRIBER] recv_stream_inner: receiving subgroup data");
                 Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?
             }
         };
 
+        log::debug!(
+            "[SUBSCRIBER] recv_stream_inner: completed processing stream for id={}",
+            id
+        );
         Ok(())
     }
 
@@ -245,23 +275,44 @@ impl Subscriber {
         mut subgroup_writer: serve::SubgroupWriter,
         mut reader: Reader,
     ) -> Result<(), SessionError> {
-        log::trace!("received subgroup: {:?}", subgroup_writer.info);
+        log::debug!(
+            "[SUBSCRIBER] recv_subgroup: starting - group_id={}, subgroup_id={}, priority={}",
+            subgroup_writer.info.group_id,
+            subgroup_writer.info.subgroup_id,
+            subgroup_writer.info.priority
+        );
 
+        let mut object_count = 0;
         while !reader.done().await? {
+            log::trace!(
+                "[SUBSCRIBER] recv_subgroup: reading object #{} (has_ext_headers={})",
+                object_count + 1,
+                stream_header_type.has_extension_headers()
+            );
+
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
             let mut remaining_bytes = match stream_header_type.has_extension_headers() {
                 true => {
                     let object = reader.decode::<data::SubgroupObjectExt>().await?;
-                    log::trace!(
-                        "received subgroup object with extension headers: {:?}",
-                        object
+                    log::debug!(
+                        "[SUBSCRIBER] recv_subgroup: object #{} with extension headers - object_id_delta={}, payload_length={}, status={:?}",
+                        object_count + 1,
+                        object.object_id_delta,
+                        object.payload_length,
+                        object.status
                     );
                     object.payload_length
                 }
                 false => {
                     let object = reader.decode::<data::SubgroupObject>().await?;
-                    log::trace!("received subgroup object: {:?}", object);
+                    log::debug!(
+                        "[SUBSCRIBER] recv_subgroup: object #{} - object_id_delta={}, payload_length={}, status={:?}",
+                        object_count + 1,
+                        object.object_id_delta,
+                        object.payload_length,
+                        object.status
+                    );
                     object.payload_length
                 }
             };
@@ -269,17 +320,51 @@ impl Subscriber {
             // TODO SLG - object_id_delta, extension headers and object status are being ignored and not passed on
 
             let mut object_writer = subgroup_writer.create(remaining_bytes)?;
+            log::trace!(
+                "[SUBSCRIBER] recv_subgroup: reading payload for object #{} ({} bytes)",
+                object_count + 1,
+                remaining_bytes
+            );
 
+            let mut chunks_read = 0;
             while remaining_bytes > 0 {
                 let data = reader
                     .read_chunk(remaining_bytes)
                     .await?
-                    .ok_or(SessionError::WrongSize)?;
-                //log::trace!("received subgroup payload: {:?}", data.len());
+                    .ok_or_else(|| {
+                        log::error!(
+                            "[SUBSCRIBER] recv_subgroup: ERROR - stream ended with {} bytes remaining for object #{}",
+                            remaining_bytes,
+                            object_count + 1
+                        );
+                        SessionError::WrongSize
+                    })?;
+                log::trace!(
+                    "[SUBSCRIBER] recv_subgroup: received payload chunk #{} for object #{} ({} bytes, {} remaining)",
+                    chunks_read + 1,
+                    object_count + 1,
+                    data.len(),
+                    remaining_bytes - data.len()
+                );
                 remaining_bytes -= data.len();
                 object_writer.write(data)?;
+                chunks_read += 1;
             }
+
+            log::trace!(
+                "[SUBSCRIBER] recv_subgroup: completed object #{} ({} chunks)",
+                object_count + 1,
+                chunks_read
+            );
+            object_count += 1;
         }
+
+        log::info!(
+            "[SUBSCRIBER] recv_subgroup: completed subgroup (group_id={}, subgroup_id={}, {} objects received)",
+            subgroup_writer.info.group_id,
+            subgroup_writer.info.subgroup_id,
+            object_count
+        );
 
         Ok(())
     }

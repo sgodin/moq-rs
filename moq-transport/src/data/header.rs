@@ -58,14 +58,31 @@ impl StreamHeaderType {
 impl Encode for StreamHeaderType {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         let val = *self as u64;
+        log::trace!(
+            "[ENCODE] StreamHeaderType: encoding {:?} as {:#x}",
+            self,
+            val
+        );
         val.encode(w)?;
+        log::trace!("[ENCODE] StreamHeaderType: encoded successfully");
         Ok(())
     }
 }
 
 impl Decode for StreamHeaderType {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
-        let header_type = match u64::decode(r)? {
+        log::trace!(
+            "[DECODE] StreamHeaderType: starting decode, buffer_remaining={} bytes",
+            r.remaining()
+        );
+
+        let type_value = u64::decode(r)?;
+        log::trace!(
+            "[DECODE] StreamHeaderType: decoded type value={:#x}",
+            type_value
+        );
+
+        let header_type = match type_value {
             0x10_u64 => Ok(Self::SubgroupZeroId),
             0x11_u64 => Ok(Self::SubgroupZeroIdExt),
             0x12_u64 => Ok(Self::SubgroupOjbectId),
@@ -79,11 +96,22 @@ impl Decode for StreamHeaderType {
             0x1c_u64 => Ok(Self::SubgroupIdEndOfGroup),
             0x1d_u64 => Ok(Self::SubgroupIdExtEndOfGroup),
             0x05_u64 => Ok(Self::Fetch),
-            _ => Err(DecodeError::InvalidHeaderType),
+            _ => {
+                log::error!(
+                    "[DECODE] StreamHeaderType: INVALID type value={:#x}",
+                    type_value
+                );
+                Err(DecodeError::InvalidHeaderType)
+            }
         };
 
-        if let Ok(header_type_inner) = header_type {
-            log::trace!("stream header type: {header_type_inner}");
+        if let Ok(header_type_inner) = &header_type {
+            log::debug!(
+                "[DECODE] StreamHeaderType: {}, has_subgroup_id={}, has_extension_headers={}",
+                header_type_inner,
+                header_type_inner.has_subgroup_id(),
+                header_type_inner.has_extension_headers()
+            );
         }
 
         header_type
@@ -110,17 +138,46 @@ pub struct StreamHeader {
 
 impl Decode for StreamHeader {
     fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+        log::trace!(
+            "[DECODE] StreamHeader: starting decode, buffer_remaining={} bytes",
+            r.remaining()
+        );
+
         let header_type = StreamHeaderType::decode(r)?;
+        log::trace!(
+            "[DECODE] StreamHeader: decoded header_type={:?}",
+            header_type
+        );
 
         let subgroup_header = match header_type.is_subgroup() {
-            true => Some(SubgroupHeader::decode(header_type, r)?),
-            false => None,
+            true => {
+                log::trace!("[DECODE] StreamHeader: decoding subgroup header");
+                Some(SubgroupHeader::decode(header_type, r)?)
+            }
+            false => {
+                log::trace!("[DECODE] StreamHeader: no subgroup header (not a subgroup type)");
+                None
+            }
         };
 
         let fetch_header = match header_type.is_fetch() {
-            true => Some(FetchHeader::decode(header_type, r)?),
-            false => None,
+            true => {
+                log::trace!("[DECODE] StreamHeader: decoding fetch header");
+                Some(FetchHeader::decode(header_type, r)?)
+            }
+            false => {
+                log::trace!("[DECODE] StreamHeader: no fetch header (not a fetch type)");
+                None
+            }
         };
+
+        log::debug!(
+            "[DECODE] StreamHeader complete: type={:?}, has_subgroup={}, has_fetch={}, buffer_remaining={} bytes",
+            header_type,
+            subgroup_header.is_some(),
+            fetch_header.is_some(),
+            r.remaining()
+        );
 
         Ok(Self {
             header_type,
@@ -132,20 +189,39 @@ impl Decode for StreamHeader {
 
 impl Encode for StreamHeader {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
+        log::trace!(
+            "[ENCODE] StreamHeader: starting encode for type={:?}, has_subgroup={}, has_fetch={}",
+            self.header_type,
+            self.subgroup_header.is_some(),
+            self.fetch_header.is_some()
+        );
+
         // Note: we are intentionally not encoding the header_type here, it will be encoded in the
         //       appropriate substructures.
         //self.header_type.encode(w)?;
         if self.header_type.is_subgroup() {
             if let Some(subgroup_header) = &self.subgroup_header {
+                log::trace!("[ENCODE] StreamHeader: encoding subgroup header");
                 subgroup_header.encode(w)?;
             } else {
+                log::error!(
+                    "[ENCODE] StreamHeader: MISSING subgroup header for subgroup type={:?}",
+                    self.header_type
+                );
                 return Err(EncodeError::MissingField("SubgroupHeader".to_string()));
             }
         } else if let Some(fetch_header) = &self.fetch_header {
+            log::trace!("[ENCODE] StreamHeader: encoding fetch header");
             fetch_header.encode(w)?;
         } else {
+            log::error!(
+                "[ENCODE] StreamHeader: MISSING fetch header for fetch type={:?}",
+                self.header_type
+            );
             return Err(EncodeError::MissingField("FetchHeader".to_string()));
         }
+
+        log::debug!("[ENCODE] StreamHeader complete");
 
         Ok(())
     }
