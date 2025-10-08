@@ -80,7 +80,6 @@ impl Web {
 async fn serve_fingerprint(State(state): State<WebState>) -> impl IntoResponse {
     state.fingerprint
 }
-
 async fn serve_qlog(
     Path(cid): Path<String>,
     State(state): State<WebState>,
@@ -91,8 +90,11 @@ async fn serve_qlog(
         "Qlog serving not enabled".to_string(),
     ))?;
 
+    // Strip _server.qlog suffix if present to get the base CID
+    let base_cid = cid.strip_suffix("_server.qlog").unwrap_or(&cid);
+
     // Construct the expected filename
-    let filename = format!("{}_server.qlog", cid);
+    let filename = format!("{}_server.qlog", base_cid);
     let file_path = qlog_dir.join(&filename);
 
     // Security: Ensure the path is still within qlog_dir (prevent path traversal)
