@@ -129,9 +129,7 @@ impl Endpoint {
 
 pub struct Server {
     quic: quinn::Endpoint,
-    accept: FuturesUnordered<
-        BoxFuture<'static, anyhow::Result<(web_transport::Session, String)>>,
-    >,
+    accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<(web_transport::Session, String)>>>,
     qlog_dir: Option<Arc<PathBuf>>,
     base_server_config: Arc<quinn::ServerConfig>,
 }
