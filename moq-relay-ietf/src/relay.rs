@@ -35,6 +35,7 @@ pub struct RelayConfig {
 pub struct Relay {
     quic: quic::Endpoint,
     announce: Option<Url>,
+    mlog_dir: Option<PathBuf>,
     locals: Locals,
     api: Option<Api>,
     remotes: Option<(RemotesProducer, RemotesConsumer)>,
@@ -46,9 +47,19 @@ impl Relay {
         let quic = quic::Endpoint::new(quic::Config {
             bind: config.bind,
             qlog_dir: config.qlog_dir,
-            mlog_dir: config.mlog_dir,
             tls: config.tls,
         })?;
+
+        // Validate mlog directory if provided
+        if let Some(mlog_dir) = &config.mlog_dir {
+            if !mlog_dir.exists() {
+                anyhow::bail!("mlog directory does not exist: {}", mlog_dir.display());
+            }
+            if !mlog_dir.is_dir() {
+                anyhow::bail!("mlog path is not a directory: {}", mlog_dir.display());
+            }
+            log::info!("mlog output enabled: {}", mlog_dir.display());
+        }
 
         let api = if let (Some(url), Some(node)) = (config.api, config.node) {
             log::info!("using moq-api: url={} node={}", url, node);
@@ -70,6 +81,7 @@ impl Relay {
         Ok(Self {
             quic,
             announce: config.announce,
+            mlog_dir: config.mlog_dir,
             api,
             locals,
             remotes,
@@ -123,7 +135,11 @@ impl Relay {
         loop {
             tokio::select! {
                 res = server.accept() => {
-                    let (conn, mlog_path) = res.context("failed to accept QUIC connection")?;
+                    let (conn, connection_id) = res.context("failed to accept QUIC connection")?;
+
+                    // Construct mlog path from connection ID if mlog directory is configured
+                    let mlog_path = self.mlog_dir.as_ref()
+                        .map(|dir| dir.join(format!("{}_server.mlog", connection_id)));
 
                     let locals = self.locals.clone();
                     let remotes = remotes.clone();

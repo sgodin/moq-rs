@@ -47,6 +47,8 @@ pub struct Session {
     outgoing: Queue<Message>,
 
     /// Optional mlog writer for MoQ Transport events
+    /// Currently only used during setup; will be used for runtime events (SUBSCRIBE, ANNOUNCE, etc.)
+    #[expect(unused, reason = "will be used when adding more mlog events")]
     mlog: Option<mlog::MlogWriter>,
 }
 

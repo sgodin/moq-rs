@@ -60,7 +60,6 @@ async fn main() -> anyhow::Result<()> {
     let quic = quic::Endpoint::new(moq_native_ietf::quic::Config {
         bind: cli.bind,
         qlog_dir: None,
-        mlog_dir: None,
         tls: tls.clone(),
     })?;
 
