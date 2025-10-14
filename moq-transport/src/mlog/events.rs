@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
-use crate::setup;
+use crate::{message, setup};
 
 /// MoQ Transport event following qlog patterns
 #[serde_with::skip_serializing_none]
@@ -85,6 +85,128 @@ pub fn server_setup_created(time: f64, stream_id: u64, msg: &setup::Server) -> E
                 "selected_version": format!("{:?}", msg.version),
                 "number_of_parameters": msg.params.0.len(),
             }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for SUBSCRIBE
+pub fn subscribe_parsed(time: f64, stream_id: u64, msg: &message::Subscribe) -> Event {
+    let mut message = json!({
+        "subscribe_id": msg.id,
+        "track_alias": msg.id, // In SUBSCRIBE, the id field serves as the track_alias
+        "track_namespace": msg.track_namespace.to_string(),
+        "track_name": &msg.track_name,
+        "subscriber_priority": msg.subscriber_priority,
+        "group_order": format!("{:?}", msg.group_order),
+        "filter_type": format!("{:?}", msg.filter_type),
+        "number_of_parameters": msg.params.0.len(),
+    });
+
+    // Add optional fields based on filter type
+    if let Some(start_loc) = &msg.start_location {
+        message["start_group"] = json!(start_loc.group_id);
+        message["start_object"] = json!(start_loc.object_id);
+    }
+    if let Some(end_group) = msg.end_group_id {
+        message["end_group"] = json!(end_group);
+    }
+
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "subscribe".to_string(),
+            message,
+        }),
+    }
+}
+
+/// Create a control_message_created event for SUBSCRIBE
+pub fn subscribe_created(time: f64, stream_id: u64, msg: &message::Subscribe) -> Event {
+    let mut message = json!({
+        "subscribe_id": msg.id,
+        "track_alias": msg.id,
+        "track_namespace": msg.track_namespace.to_string(),
+        "track_name": &msg.track_name,
+        "subscriber_priority": msg.subscriber_priority,
+        "group_order": format!("{:?}", msg.group_order),
+        "filter_type": format!("{:?}", msg.filter_type),
+        "number_of_parameters": msg.params.0.len(),
+    });
+
+    if let Some(start_loc) = &msg.start_location {
+        message["start_group"] = json!(start_loc.group_id);
+        message["start_object"] = json!(start_loc.object_id);
+    }
+    if let Some(end_group) = msg.end_group_id {
+        message["end_group"] = json!(end_group);
+    }
+
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "subscribe".to_string(),
+            message,
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for SUBSCRIBE_OK
+pub fn subscribe_ok_parsed(time: f64, stream_id: u64, msg: &message::SubscribeOk) -> Event {
+    let mut message = json!({
+        "subscribe_id": msg.id,
+        "expires": msg.expires,
+        "group_order": format!("{:?}", msg.group_order),
+        "content_exists": msg.content_exists,
+        "number_of_parameters": msg.params.0.len(),
+    });
+
+    // Add optional largest_location fields if content exists
+    if msg.content_exists {
+        if let Some(largest) = &msg.largest_location {
+            message["largest_group_id"] = json!(largest.group_id);
+            message["largest_object_id"] = json!(largest.object_id);
+        }
+    }
+
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "subscribe_ok".to_string(),
+            message,
+        }),
+    }
+}
+
+/// Create a control_message_created event for SUBSCRIBE_OK
+pub fn subscribe_ok_created(time: f64, stream_id: u64, msg: &message::SubscribeOk) -> Event {
+    let mut message = json!({
+        "subscribe_id": msg.id,
+        "expires": msg.expires,
+        "group_order": format!("{:?}", msg.group_order),
+        "content_exists": msg.content_exists,
+        "number_of_parameters": msg.params.0.len(),
+    });
+
+    if msg.content_exists {
+        if let Some(largest) = &msg.largest_location {
+            message["largest_group_id"] = json!(largest.group_id);
+            message["largest_object_id"] = json!(largest.object_id);
+        }
+    }
+
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "subscribe_ok".to_string(),
+            message,
         }),
     }
 }
