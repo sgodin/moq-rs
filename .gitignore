@@ -4,4 +4,4 @@ logs/
 *.mp4
 result
 qlog/
-mlog/
+/mlog/
