@@ -22,7 +22,7 @@ use reader::*;
 use writer::*;
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::sync::{atomic, Arc};
+use std::sync::{atomic, Arc, Mutex};
 
 use crate::coding::KeyValuePairs;
 use crate::message::Message;
@@ -47,9 +47,8 @@ pub struct Session {
     outgoing: Queue<Message>,
 
     /// Optional mlog writer for MoQ Transport events
-    /// Currently only used during setup; will be used for runtime events (SUBSCRIBE, ANNOUNCE, etc.)
-    #[expect(unused, reason = "will be used when adding more mlog events")]
-    mlog: Option<mlog::MlogWriter>,
+    /// Wrapped in Arc<Mutex<>> to share across send/recv tasks when enabled
+    mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
 }
 
 impl Session {
@@ -84,7 +83,7 @@ impl Session {
             publisher: publisher.clone(),
             subscriber: subscriber.clone(),
             outgoing: outgoing.1,
-            mlog,
+            mlog: mlog.map(|m| Arc::new(Mutex::new(m))),
         };
 
         (session, publisher, subscriber)
@@ -191,8 +190,8 @@ impl Session {
     /// and receiving and processing QUIC datagrams received
     pub async fn run(self) -> Result<(), SessionError> {
         tokio::select! {
-            res = Self::run_recv(self.recver, self.publisher, self.subscriber.clone()) => res,
-            res = Self::run_send(self.sender, self.outgoing) => res,
+            res = Self::run_recv(self.recver, self.publisher, self.subscriber.clone(), self.mlog.clone()) => res,
+            res = Self::run_send(self.sender, self.outgoing, self.mlog.clone()) => res,
             res = Self::run_streams(self.webtransport.clone(), self.subscriber.clone()) => res,
             res = Self::run_datagrams(self.webtransport, self.subscriber) => res,
         }
@@ -202,9 +201,34 @@ impl Session {
     async fn run_send(
         mut sender: Writer,
         mut outgoing: Queue<message::Message>,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
         while let Some(msg) = outgoing.pop().await {
             log::debug!("sending message: {:?}", msg);
+
+            // Emit mlog event for sent control messages
+            if let Some(ref mlog) = mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // Control stream is always stream 0
+
+                    // Emit events based on message type
+                    let event = match &msg {
+                        Message::Subscribe(m) => {
+                            Some(mlog::events::subscribe_created(time, stream_id, m))
+                        }
+                        Message::SubscribeOk(m) => {
+                            Some(mlog::events::subscribe_ok_created(time, stream_id, m))
+                        }
+                        _ => None, // TODO: Add other message types
+                    };
+
+                    if let Some(event) = event {
+                        let _ = mlog_guard.add_event(event);
+                    }
+                }
+            }
+
             sender.encode(&msg).await?;
         }
 
@@ -220,10 +244,34 @@ impl Session {
         mut recver: Reader,
         mut publisher: Option<Publisher>,
         mut subscriber: Option<Subscriber>,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
         loop {
             let msg: message::Message = recver.decode().await?;
             log::debug!("received message: {:?}", msg);
+
+            // Emit mlog event for received control messages
+            if let Some(ref mlog) = mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // Control stream is always stream 0
+
+                    // Emit events based on message type
+                    let event = match &msg {
+                        Message::Subscribe(m) => {
+                            Some(mlog::events::subscribe_parsed(time, stream_id, m))
+                        }
+                        Message::SubscribeOk(m) => {
+                            Some(mlog::events::subscribe_ok_parsed(time, stream_id, m))
+                        }
+                        _ => None, // TODO: Add other message types
+                    };
+
+                    if let Some(event) = event {
+                        let _ = mlog_guard.add_event(event);
+                    }
+                }
+            }
 
             let msg = match TryInto::<message::Publisher>::try_into(msg) {
                 Ok(msg) => {
