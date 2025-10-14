@@ -220,6 +220,24 @@ impl Session {
                         Message::SubscribeOk(m) => {
                             Some(mlog::events::subscribe_ok_created(time, stream_id, m))
                         }
+                        Message::SubscribeError(m) => {
+                            Some(mlog::events::subscribe_error_created(time, stream_id, m))
+                        }
+                        Message::Unsubscribe(m) => {
+                            Some(mlog::events::unsubscribe_created(time, stream_id, m))
+                        }
+                        Message::PublishNamespace(m) => {
+                            Some(mlog::events::publish_namespace_created(time, stream_id, m))
+                        }
+                        Message::PublishNamespaceOk(m) => Some(
+                            mlog::events::publish_namespace_ok_created(time, stream_id, m),
+                        ),
+                        Message::PublishNamespaceError(m) => Some(
+                            mlog::events::publish_namespace_error_created(time, stream_id, m),
+                        ),
+                        Message::GoAway(m) => {
+                            Some(mlog::events::go_away_created(time, stream_id, m))
+                        }
                         _ => None, // TODO: Add other message types
                     };
 
@@ -263,6 +281,24 @@ impl Session {
                         }
                         Message::SubscribeOk(m) => {
                             Some(mlog::events::subscribe_ok_parsed(time, stream_id, m))
+                        }
+                        Message::SubscribeError(m) => {
+                            Some(mlog::events::subscribe_error_parsed(time, stream_id, m))
+                        }
+                        Message::Unsubscribe(m) => {
+                            Some(mlog::events::unsubscribe_parsed(time, stream_id, m))
+                        }
+                        Message::PublishNamespace(m) => {
+                            Some(mlog::events::publish_namespace_parsed(time, stream_id, m))
+                        }
+                        Message::PublishNamespaceOk(m) => Some(
+                            mlog::events::publish_namespace_ok_parsed(time, stream_id, m),
+                        ),
+                        Message::PublishNamespaceError(m) => Some(
+                            mlog::events::publish_namespace_error_parsed(time, stream_id, m),
+                        ),
+                        Message::GoAway(m) => {
+                            Some(mlog::events::go_away_parsed(time, stream_id, m))
                         }
                         _ => None, // TODO: Add other message types
                     };

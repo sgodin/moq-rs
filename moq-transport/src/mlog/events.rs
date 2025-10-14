@@ -210,3 +210,219 @@ pub fn subscribe_ok_created(time: f64, stream_id: u64, msg: &message::SubscribeO
         }),
     }
 }
+
+/// Create a control_message_parsed event for SUBSCRIBE_ERROR
+pub fn subscribe_error_parsed(time: f64, stream_id: u64, msg: &message::SubscribeError) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "subscribe_error".to_string(),
+            message: json!({
+                "subscribe_id": msg.id,
+                "error_code": msg.error_code,
+                "reason_phrase": &msg.reason_phrase.0,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for SUBSCRIBE_ERROR
+pub fn subscribe_error_created(time: f64, stream_id: u64, msg: &message::SubscribeError) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "subscribe_error".to_string(),
+            message: json!({
+                "subscribe_id": msg.id,
+                "error_code": msg.error_code,
+                "reason_phrase": &msg.reason_phrase.0,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for PUBLISH_NAMESPACE (was ANNOUNCE in earlier drafts)
+pub fn publish_namespace_parsed(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespace,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "publish_namespace".to_string(),
+            message: json!({
+                "request_id": msg.id,
+                "track_namespace": msg.track_namespace.to_string(),
+                "number_of_parameters": msg.params.0.len(),
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for PUBLISH_NAMESPACE
+pub fn publish_namespace_created(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespace,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "publish_namespace".to_string(),
+            message: json!({
+                "request_id": msg.id,
+                "track_namespace": msg.track_namespace.to_string(),
+                "number_of_parameters": msg.params.0.len(),
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for PUBLISH_NAMESPACE_OK (was ANNOUNCE_OK)
+pub fn publish_namespace_ok_parsed(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespaceOk,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "publish_namespace_ok".to_string(),
+            message: json!({
+                "request_id": msg.id,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for PUBLISH_NAMESPACE_OK
+pub fn publish_namespace_ok_created(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespaceOk,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "publish_namespace_ok".to_string(),
+            message: json!({
+                "request_id": msg.id,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for PUBLISH_NAMESPACE_ERROR (was ANNOUNCE_ERROR)
+pub fn publish_namespace_error_parsed(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespaceError,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "publish_namespace_error".to_string(),
+            message: json!({
+                "request_id": msg.id,
+                "error_code": msg.error_code,
+                "reason_phrase": &msg.reason_phrase.0,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for PUBLISH_NAMESPACE_ERROR
+pub fn publish_namespace_error_created(
+    time: f64,
+    stream_id: u64,
+    msg: &message::PublishNamespaceError,
+) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "publish_namespace_error".to_string(),
+            message: json!({
+                "request_id": msg.id,
+                "error_code": msg.error_code,
+                "reason_phrase": &msg.reason_phrase.0,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for UNSUBSCRIBE
+pub fn unsubscribe_parsed(time: f64, stream_id: u64, msg: &message::Unsubscribe) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "unsubscribe".to_string(),
+            message: json!({
+                "subscribe_id": msg.id,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for UNSUBSCRIBE
+pub fn unsubscribe_created(time: f64, stream_id: u64, msg: &message::Unsubscribe) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "unsubscribe".to_string(),
+            message: json!({
+                "subscribe_id": msg.id,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_parsed event for GOAWAY
+pub fn go_away_parsed(time: f64, stream_id: u64, msg: &message::GoAway) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_parsed".to_string(),
+        data: EventData::ControlMessageParsed(ControlMessageParsed {
+            stream_id,
+            message_type: "goaway".to_string(),
+            message: json!({
+                "new_session_uri": &msg.uri.0,
+            }),
+        }),
+    }
+}
+
+/// Create a control_message_created event for GOAWAY
+pub fn go_away_created(time: f64, stream_id: u64, msg: &message::GoAway) -> Event {
+    Event {
+        time,
+        name: "moqt:control_message_created".to_string(),
+        data: EventData::ControlMessageCreated(ControlMessageCreated {
+            stream_id,
+            message_type: "goaway".to_string(),
+            message: json!({
+                "new_session_uri": &msg.uri.0,
+            }),
+        }),
+    }
+}
