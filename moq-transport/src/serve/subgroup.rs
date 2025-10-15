@@ -9,16 +9,14 @@
 //! The stream is closed with [ServeError::Closed] when all writers or readers are dropped.
 use std::{
     cmp,
-    collections::VecDeque,
     ops::Deref,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use bytes::Bytes;
 
 use crate::data::ObjectStatus;
-use crate::mlog;
-use crate::watch::{Queue, State};
+use crate::watch::State;
 
 use super::{ServeError, Track};
 
