@@ -303,7 +303,9 @@ impl Subscriber {
 
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
-            let (mut remaining_bytes, object_id_delta, status) = match stream_header_type.has_extension_headers() {
+            let (mut remaining_bytes, object_id_delta, status) = match stream_header_type
+                .has_extension_headers()
+            {
                 true => {
                     let object = reader.decode::<data::SubgroupObjectExt>().await?;
                     log::debug!(

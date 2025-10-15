@@ -7,4 +7,6 @@ mod writer;
 pub use writer::MlogWriter;
 
 pub mod events;
-pub use events::{client_setup_parsed, loglevel_event, server_setup_created, Event, EventData, LogLevel};
+pub use events::{
+    client_setup_parsed, loglevel_event, server_setup_created, Event, EventData, LogLevel,
+};

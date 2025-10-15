@@ -79,7 +79,11 @@ impl Session {
             next_requestid.clone(),
             mlog_shared.clone(),
         ));
-        let subscriber = Some(Subscriber::new(outgoing.0, next_requestid, mlog_shared.clone()));
+        let subscriber = Some(Subscriber::new(
+            outgoing.0,
+            next_requestid,
+            mlog_shared.clone(),
+        ));
 
         let session = Self {
             webtransport,
@@ -234,7 +238,7 @@ impl Session {
                         Message::PublishNamespace(m) => {
                             Some(mlog::events::publish_namespace_created(time, stream_id, m))
                         }
-                       Message::PublishNamespaceOk(m) => Some(
+                        Message::PublishNamespaceOk(m) => Some(
                             mlog::events::publish_namespace_ok_created(time, stream_id, m),
                         ),
                         Message::PublishNamespaceError(m) => Some(
