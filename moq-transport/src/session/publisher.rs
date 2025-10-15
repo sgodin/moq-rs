@@ -8,6 +8,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use crate::{
     coding::TrackNamespace,
     message::{self, GroupOrder, Message},
+    mlog,
     serve::{ServeError, TracksReader},
 };
 
@@ -43,6 +44,9 @@ pub struct Publisher {
     /// for each request (even numbers).  If we accepted an inbound QUIC connection then request id's start at 1 and
     /// increment by 2 for each request (odd numbers).
     next_requestid: Arc<atomic::AtomicU64>,
+
+    /// Optional mlog writer for logging transport events
+    mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
 }
 
 impl Publisher {
@@ -50,6 +54,7 @@ impl Publisher {
         outgoing: Queue<Message>,
         webtransport: web_transport::Session,
         next_requestid: Arc<atomic::AtomicU64>,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Self {
         Self {
             webtransport,
@@ -58,6 +63,7 @@ impl Publisher {
             unknown: Default::default(),
             outgoing,
             next_requestid,
+            mlog,
         }
     }
 
@@ -305,7 +311,7 @@ impl Publisher {
             };
 
             // Create new Subscribed entry and add to HashMap
-            let (send, recv) = Subscribed::new(self.clone(), msg);
+            let (send, recv) = Subscribed::new(self.clone(), msg, self.mlog.clone());
             entry.insert(recv);
 
             send

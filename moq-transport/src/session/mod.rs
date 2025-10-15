@@ -69,12 +69,17 @@ impl Session {
     ) -> (Self, Option<Publisher>, Option<Subscriber>) {
         let next_requestid = Arc::new(atomic::AtomicU64::new(first_requestid));
         let outgoing = Queue::default().split();
+
+        // Wrap mlog in Arc<Mutex<>> for sharing across tasks
+        let mlog_shared = mlog.map(|m| Arc::new(Mutex::new(m)));
+
         let publisher = Some(Publisher::new(
             outgoing.0.clone(),
             webtransport.clone(),
             next_requestid.clone(),
+            mlog_shared.clone(),
         ));
-        let subscriber = Some(Subscriber::new(outgoing.0, next_requestid));
+        let subscriber = Some(Subscriber::new(outgoing.0, next_requestid, mlog_shared.clone()));
 
         let session = Self {
             webtransport,
@@ -83,7 +88,7 @@ impl Session {
             publisher: publisher.clone(),
             subscriber: subscriber.clone(),
             outgoing: outgoing.1,
-            mlog: mlog.map(|m| Arc::new(Mutex::new(m))),
+            mlog: mlog_shared,
         };
 
         (session, publisher, subscriber)
@@ -229,7 +234,7 @@ impl Session {
                         Message::PublishNamespace(m) => {
                             Some(mlog::events::publish_namespace_created(time, stream_id, m))
                         }
-                        Message::PublishNamespaceOk(m) => Some(
+                       Message::PublishNamespaceOk(m) => Some(
                             mlog::events::publish_namespace_ok_created(time, stream_id, m),
                         ),
                         Message::PublishNamespaceError(m) => Some(

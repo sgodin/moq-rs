@@ -1,9 +1,11 @@
 use std::ops;
+use std::sync::{Arc, Mutex};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
 use crate::coding::{Encode, KeyValuePairs, Location, ReasonPhrase};
+use crate::mlog;
 use crate::serve::{ServeError, TrackReaderMode};
 use crate::watch::State;
 use crate::{data, message, serve};
@@ -58,10 +60,17 @@ pub struct Subscribed {
     /// Tracks if SubscribeOk has been sent yet or not. Used to send
     /// SubscribeDone vs SubscribeError on drop.
     ok: bool,
+
+    /// Optional mlog writer for logging transport events
+    mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
 }
 
 impl Subscribed {
-    pub(super) fn new(publisher: Publisher, msg: message::Subscribe) -> (Self, SubscribedRecv) {
+    pub(super) fn new(
+        publisher: Publisher,
+        msg: message::Subscribe,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
+    ) -> (Self, SubscribedRecv) {
         let (send, recv) = State::default().split();
         let info = SubscribeInfo {
             namespace: msg.track_namespace.clone(),
@@ -74,6 +83,7 @@ impl Subscribed {
             msg,
             info,
             ok: false,
+            mlog,
         };
 
         // Prevents updates after being closed
@@ -203,9 +213,10 @@ impl Subscribed {
                         let publisher = self.publisher.clone();
                         let state = self.state.clone();
                         let info = subgroup.info.clone();
+                        let mlog = self.mlog.clone();
 
                         tasks.push(async move {
-                            if let Err(err) = Self::serve_subgroup(header, subgroup, publisher, state).await {
+                            if let Err(err) = Self::serve_subgroup(header, subgroup, publisher, state, mlog).await {
                                 log::warn!("failed to serve subgroup: {:?}, error: {}", info, err);
                             }
                         });
@@ -225,6 +236,7 @@ impl Subscribed {
         mut subgroup_reader: serve::SubgroupReader,
         mut publisher: Publisher,
         state: State<SubscribedState>,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
         log::debug!(
             "[PUBLISHER] serve_subgroup: starting - group_id={}, subgroup_id={:?}, priority={}",
@@ -276,6 +288,27 @@ impl Subscribed {
             );
 
             writer.encode(&subgroup_object).await?;
+
+            // Log object sent to QUIC stack
+            if let Some(ref mlog) = mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let event = mlog::loglevel_event(
+                        time,
+                        mlog::LogLevel::Debug,
+                        format!(
+                            "object_sent_to_quic: track_alias={} group={} subgroup={} object={} payload_len={} status={:?}",
+                            header.track_alias,
+                            subgroup_reader.group_id,
+                            subgroup_reader.subgroup_id,
+                            subgroup_object_reader.object_id,
+                            subgroup_object.payload_length,
+                            subgroup_object.status
+                        ),
+                    );
+                    let _ = mlog_guard.add_event(event);
+                }
+            }
 
             state
                 .lock_mut()
