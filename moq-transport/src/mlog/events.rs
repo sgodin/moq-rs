@@ -38,6 +38,9 @@ pub enum EventData {
 
     #[serde(rename = "subgroup_object_created")]
     SubgroupObjectCreated(SubgroupObjectCreated),
+
+    #[serde(rename = "loglevel")]
+    LogLevel(LogLevelEvent),
 }
 
 /// Control message parsed event (Section 4.2 of draft-pardue-moq-qlog-moq-events)
@@ -106,6 +109,14 @@ pub struct SubgroupObjectCreated {
     /// Object-specific fields
     #[serde(flatten)]
     pub object: JsonValue,
+}
+
+/// LogLevel event for flexible logging (qlog loglevel schema)
+/// See: https://www.ietf.org/archive/id/draft-ietf-quic-qlog-main-schema-12.html#name-loglevel-events
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogLevelEvent {
+    pub message: String,
 }
 
 // Helper functions to create events for specific message types
@@ -622,5 +633,54 @@ pub fn subgroup_object_ext_created(
             stream_id,
             object: object_data,
         }),
+    }
+}
+
+// LogLevel events (generic logging)
+
+/// Log levels for qlog loglevel events
+#[derive(Debug, Clone, Copy)]
+pub enum LogLevel {
+    Fatal,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Verbose,
+}
+
+impl LogLevel {
+    fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::Fatal => "fatal",
+            LogLevel::Error => "error",
+            LogLevel::Warn => "warn",
+            LogLevel::Info => "info",
+            LogLevel::Debug => "debug",
+            LogLevel::Verbose => "verbose",
+        }
+    }
+}
+
+/// Create a loglevel event for flexible logging
+///
+/// # Arguments
+/// * `time` - Timestamp in milliseconds since connection start
+/// * `level` - Log level (debug, info, warn, error, fatal, verbose)
+/// * `message` - Freeform message text with structured information
+///
+/// # Example
+/// ```ignore
+/// loglevel_event(
+///     12.345,
+///     LogLevel::Debug,
+///     "object_queued: track_alias=1 group=5 subgroup=2 object=10 payload_len=1024"
+/// )
+/// ```
+pub fn loglevel_event(time: f64, level: LogLevel, message: String) -> Event {
+    Event {
+        time,
+        name: format!("loglevel:{}", level.as_str()),
+        data: EventData::LogLevel(LogLevelEvent { message }),
     }
 }

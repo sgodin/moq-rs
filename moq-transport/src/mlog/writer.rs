@@ -32,6 +32,7 @@ impl MlogWriter {
                     "type": "server"
                 },
                 "event_schemas": [
+                    "urn:ietf:params:qlog:events:loglevel",
                     "urn:ietf:params:qlog:events:moqt"
                 ]
             }
