@@ -316,33 +316,42 @@ impl Subscriber {
 
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
-            let (mut remaining_bytes, object_id_delta, status, decoded_object) = match stream_header_type
-                .has_extension_headers()
-            {
-                true => {
-                    let object = reader.decode::<data::SubgroupObjectExt>().await?;
-                    log::debug!(
+            let (mut remaining_bytes, object_id_delta, status, decoded_object) =
+                match stream_header_type.has_extension_headers() {
+                    true => {
+                        let object = reader.decode::<data::SubgroupObjectExt>().await?;
+                        log::debug!(
                         "[SUBSCRIBER] recv_subgroup: object #{} with extension headers - object_id_delta={}, payload_length={}, status={:?}",
                         object_count + 1,
                         object.object_id_delta,
                         object.payload_length,
                         object.status
                     );
-                    let obj_copy = object.clone();
-                    (object.payload_length, object.object_id_delta, object.status, Some(obj_copy))
-                }
-                false => {
-                    let object = reader.decode::<data::SubgroupObject>().await?;
-                    log::debug!(
+                        let obj_copy = object.clone();
+                        (
+                            object.payload_length,
+                            object.object_id_delta,
+                            object.status,
+                            Some(obj_copy),
+                        )
+                    }
+                    false => {
+                        let object = reader.decode::<data::SubgroupObject>().await?;
+                        log::debug!(
                         "[SUBSCRIBER] recv_subgroup: object #{} - object_id_delta={}, payload_length={}, status={:?}",
                         object_count + 1,
                         object.object_id_delta,
                         object.payload_length,
                         object.status
                     );
-                    (object.payload_length, object.object_id_delta, object.status, None)
-                }
-            };
+                        (
+                            object.payload_length,
+                            object.object_id_delta,
+                            object.status,
+                            None,
+                        )
+                    }
+                };
 
             // Calculate absolute object_id from delta
             current_object_id += object_id_delta;
