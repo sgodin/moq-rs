@@ -63,6 +63,11 @@ pub struct Cli {
     /// Requires --dev to enable the web server. Only serves files by exact CID - no index.
     #[arg(long)]
     pub qlog_serve: bool,
+
+    /// Serve mlog files over HTTPS at /mlog/:cid
+    /// Requires --dev to enable the web server. Only serves files by exact CID - no index.
+    #[arg(long)]
+    pub mlog_serve: bool,
 }
 
 #[tokio::main]
@@ -90,12 +95,20 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    // Determine mlog directory for both relay and web server
+    let mlog_dir_for_relay = cli.mlog_dir.clone();
+    let mlog_dir_for_web = if cli.mlog_serve {
+        cli.mlog_dir.clone()
+    } else {
+        None
+    };
+
     // Create a QUIC server for media.
     let relay = Relay::new(RelayConfig {
         tls: tls.clone(),
         bind: cli.bind,
         qlog_dir: qlog_dir_for_relay,
-        mlog_dir: cli.mlog_dir.clone(),
+        mlog_dir: mlog_dir_for_relay,
         node: cli.node,
         api: cli.api,
         announce: cli.announce,
@@ -108,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
             bind: cli.bind,
             tls,
             qlog_dir: qlog_dir_for_web,
+            mlog_dir: mlog_dir_for_web,
         });
 
         tokio::spawn(async move {

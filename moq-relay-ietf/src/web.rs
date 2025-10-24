@@ -14,12 +14,14 @@ pub struct WebConfig {
     pub bind: net::SocketAddr,
     pub tls: moq_native_ietf::tls::Config,
     pub qlog_dir: Option<PathBuf>,
+    pub mlog_dir: Option<PathBuf>,
 }
 
 #[derive(Clone)]
 struct WebState {
     fingerprint: String,
     qlog_dir: Option<Arc<PathBuf>>,
+    mlog_dir: Option<Arc<PathBuf>>,
 }
 
 // Run a HTTP server using Axum
@@ -48,6 +50,7 @@ impl Web {
         let state = WebState {
             fingerprint,
             qlog_dir: config.qlog_dir.map(Arc::new),
+            mlog_dir: config.mlog_dir.map(Arc::new),
         };
 
         // Build router with fingerprint endpoint
@@ -57,6 +60,12 @@ impl Web {
         if state.qlog_dir.is_some() {
             app = app.route("/qlog/:cid", get(serve_qlog));
             log::info!("qlog files available at /qlog/:cid");
+        }
+
+        // Optionally add mlog serving endpoint
+        if state.mlog_dir.is_some() {
+            app = app.route("/mlog/:cid", get(serve_mlog));
+            log::info!("mlog files available at /mlog/:cid");
         }
 
         // Add state and CORS layer
@@ -80,6 +89,7 @@ impl Web {
 async fn serve_fingerprint(State(state): State<WebState>) -> impl IntoResponse {
     state.fingerprint
 }
+
 async fn serve_qlog(
     Path(cid): Path<String>,
     State(state): State<WebState>,
@@ -121,6 +131,51 @@ async fn serve_qlog(
         (
             StatusCode::NOT_FOUND,
             format!("Failed to read qlog file: {}", e),
+        )
+    })
+}
+
+async fn serve_mlog(
+    Path(cid): Path<String>,
+    State(state): State<WebState>,
+) -> Result<Vec<u8>, (StatusCode, String)> {
+    // Get mlog directory or return 404
+    let mlog_dir = state.mlog_dir.as_ref().ok_or((
+        StatusCode::NOT_FOUND,
+        "Mlog serving not enabled".to_string(),
+    ))?;
+
+    // Strip _server.mlog suffix if present to get the base CID
+    let base_cid = cid.strip_suffix("_server.mlog").unwrap_or(&cid);
+
+    // Construct the expected filename
+    let filename = format!("{}_server.mlog", base_cid);
+    let file_path = mlog_dir.join(&filename);
+
+    // Security: Ensure the path is still within mlog_dir (prevent path traversal)
+    let canonical_dir = mlog_dir.canonicalize().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Invalid mlog directory: {}", e),
+        )
+    })?;
+
+    let canonical_file = file_path.canonicalize().map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Mlog file not found: {}", filename),
+        )
+    })?;
+
+    if !canonical_file.starts_with(&canonical_dir) {
+        return Err((StatusCode::FORBIDDEN, "Invalid path".to_string()));
+    }
+
+    // Read and return the file
+    tokio::fs::read(&canonical_file).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Failed to read mlog file: {}", e),
         )
     })
 }
