@@ -264,6 +264,16 @@ impl Subscribed {
 
         writer.encode(&header).await?;
 
+        // Log subgroup header created/sent
+        if let Some(ref mlog) = mlog {
+            if let Ok(mut mlog_guard) = mlog.lock() {
+                let time = mlog_guard.elapsed_ms();
+                let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                let event = mlog::subgroup_header_created(time, stream_id, &header);
+                let _ = mlog_guard.add_event(event);
+            }
+        }
+
         let mut object_count = 0;
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
             let subgroup_object = data::SubgroupObjectExt {
@@ -289,22 +299,18 @@ impl Subscribed {
 
             writer.encode(&subgroup_object).await?;
 
-            // Log object sent to QUIC stack
+            // Log subgroup object created/sent
             if let Some(ref mlog) = mlog {
                 if let Ok(mut mlog_guard) = mlog.lock() {
                     let time = mlog_guard.elapsed_ms();
-                    let event = mlog::loglevel_event(
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let event = mlog::subgroup_object_ext_created(
                         time,
-                        mlog::LogLevel::Debug,
-                        format!(
-                            "object_sent_to_quic: track_alias={} group={} subgroup={} object={} payload_len={} status={:?}",
-                            header.track_alias,
-                            subgroup_reader.group_id,
-                            subgroup_reader.subgroup_id,
-                            subgroup_object_reader.object_id,
-                            subgroup_object.payload_length,
-                            subgroup_object.status
-                        ),
+                        stream_id,
+                        subgroup_reader.group_id,
+                        subgroup_reader.subgroup_id,
+                        subgroup_object_reader.object_id,
+                        &subgroup_object,
                     );
                     let _ = mlog_guard.add_event(event);
                 }

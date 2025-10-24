@@ -202,6 +202,18 @@ impl Subscriber {
             stream_header.header_type
         );
 
+        // Log subgroup header parsed/received
+        if let Some(ref subgroup_header) = stream_header.subgroup_header {
+            if let Some(ref mlog) = self.mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let event = mlog::subgroup_header_parsed(time, stream_id, subgroup_header);
+                    let _ = mlog_guard.add_event(event);
+                }
+            }
+        }
+
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
@@ -294,6 +306,7 @@ impl Subscriber {
         );
 
         let mut object_count = 0;
+        let mut current_object_id = 0u64;
         while !reader.done().await? {
             log::trace!(
                 "[SUBSCRIBER] recv_subgroup: reading object #{} (has_ext_headers={})",
@@ -303,7 +316,7 @@ impl Subscriber {
 
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
-            let (mut remaining_bytes, object_id_delta, status) = match stream_header_type
+            let (mut remaining_bytes, object_id_delta, status, decoded_object) = match stream_header_type
                 .has_extension_headers()
             {
                 true => {
@@ -315,7 +328,8 @@ impl Subscriber {
                         object.payload_length,
                         object.status
                     );
-                    (object.payload_length, object.object_id_delta, object.status)
+                    let obj_copy = object.clone();
+                    (object.payload_length, object.object_id_delta, object.status, Some(obj_copy))
                 }
                 false => {
                     let object = reader.decode::<data::SubgroupObject>().await?;
@@ -326,26 +340,43 @@ impl Subscriber {
                         object.payload_length,
                         object.status
                     );
-                    (object.payload_length, object.object_id_delta, object.status)
+                    (object.payload_length, object.object_id_delta, object.status, None)
                 }
             };
 
-            // Log object received from QUIC
+            // Calculate absolute object_id from delta
+            current_object_id += object_id_delta;
+
+            // Log subgroup object parsed/received
             if let Some(ref mlog) = mlog {
                 if let Ok(mut mlog_guard) = mlog.lock() {
                     let time = mlog_guard.elapsed_ms();
-                    let event = mlog::loglevel_event(
-                        time,
-                        mlog::LogLevel::Debug,
-                        format!(
-                            "object_received_from_quic: group={} subgroup={} object_id_delta={} payload_len={} status={:?}",
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let event = if let Some(obj_ext) = decoded_object {
+                        mlog::subgroup_object_ext_parsed(
+                            time,
+                            stream_id,
                             subgroup_writer.info.group_id,
                             subgroup_writer.info.subgroup_id,
+                            current_object_id,
+                            &obj_ext,
+                        )
+                    } else {
+                        // For non-extension objects, create a temporary SubgroupObject for logging
+                        let temp_obj = data::SubgroupObject {
                             object_id_delta,
-                            remaining_bytes,
-                            status
-                        ),
-                    );
+                            payload_length: remaining_bytes,
+                            status,
+                        };
+                        mlog::subgroup_object_parsed(
+                            time,
+                            stream_id,
+                            subgroup_writer.info.group_id,
+                            subgroup_writer.info.subgroup_id,
+                            current_object_id,
+                            &temp_obj,
+                        )
+                    };
                     let _ = mlog_guard.add_event(event);
                 }
             }

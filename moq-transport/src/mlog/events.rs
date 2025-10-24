@@ -1,3 +1,25 @@
+// TODO: Unimplemented control message events (not yet needed for basic relay interop testing):
+// - SubscribeUpdate (parsed/created)
+// - PublishNamespaceDone (parsed/created)
+// - PublishNamespaceCancel (parsed/created)
+// - TrackStatus, TrackStatusOk, TrackStatusError (parsed/created)
+// - SubscribeNamespace, SubscribeNamespaceOk, SubscribeNamespaceError, UnsubscribeNamespace (parsed/created)
+// - Fetch, FetchOk, FetchError, FetchCancel (parsed/created)
+// - Publish, PublishOk, PublishError, PublishDone (parsed/created)
+// - MaxRequestId (parsed/created)
+// - RequestsBlocked (parsed/created)
+//
+// TODO: Unimplemented data plane events (from draft-pardue-moq-qlog-moq-events):
+// - stream_type_set (when stream type becomes known)
+// - object_datagram_created/parsed
+// - object_datagram_status_created/parsed
+// - fetch_header_created/parsed
+// - fetch_object_created/parsed
+//
+// TODO: stream_id field currently uses placeholder value (0)
+// - Need to plumb actual QUIC stream IDs through web_transport abstractions
+// - This would enable correlation between QUIC qlog and MoQ mlog events
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
@@ -543,14 +565,24 @@ pub fn subgroup_header_created(time: f64, stream_id: u64, header: &data::Subgrou
 }
 
 /// Create a subgroup_object_parsed event
-pub fn subgroup_object_parsed(time: f64, stream_id: u64, object: &data::SubgroupObject) -> Event {
+pub fn subgroup_object_parsed(
+    time: f64,
+    stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
+    object: &data::SubgroupObject,
+) -> Event {
     let mut object_data = json!({
-        "object_id_delta": object.object_id_delta,
-        "payload_length": object.payload_length,
+        "group_id": group_id,
+        "subgroup_id": subgroup_id,
+        "object_id": object_id,
+        "extension_headers_length": 0,
+        "object_payload_length": object.payload_length,
     });
 
     if let Some(status) = object.status {
-        object_data["status"] = json!(format!("{:?}", status));
+        object_data["object_status"] = json!(format!("{:?}", status));
     }
 
     Event {
@@ -564,14 +596,24 @@ pub fn subgroup_object_parsed(time: f64, stream_id: u64, object: &data::Subgroup
 }
 
 /// Create a subgroup_object_created event
-pub fn subgroup_object_created(time: f64, stream_id: u64, object: &data::SubgroupObject) -> Event {
+pub fn subgroup_object_created(
+    time: f64,
+    stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
+    object: &data::SubgroupObject,
+) -> Event {
     let mut object_data = json!({
-        "object_id_delta": object.object_id_delta,
-        "payload_length": object.payload_length,
+        "group_id": group_id,
+        "subgroup_id": subgroup_id,
+        "object_id": object_id,
+        "extension_headers_length": 0,
+        "object_payload_length": object.payload_length,
     });
 
     if let Some(status) = object.status {
-        object_data["status"] = json!(format!("{:?}", status));
+        object_data["object_status"] = json!(format!("{:?}", status));
     }
 
     Event {
@@ -588,16 +630,21 @@ pub fn subgroup_object_created(time: f64, stream_id: u64, object: &data::Subgrou
 pub fn subgroup_object_ext_parsed(
     time: f64,
     stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
     object: &data::SubgroupObjectExt,
 ) -> Event {
     let mut object_data = json!({
-        "object_id_delta": object.object_id_delta,
-        "payload_length": object.payload_length,
-        "number_of_extension_headers": object.extension_headers.0.len(),
+        "group_id": group_id,
+        "subgroup_id": subgroup_id,
+        "object_id": object_id,
+        "extension_headers_length": object.extension_headers.0.len(),
+        "object_payload_length": object.payload_length,
     });
 
     if let Some(status) = object.status {
-        object_data["status"] = json!(format!("{:?}", status));
+        object_data["object_status"] = json!(format!("{:?}", status));
     }
 
     Event {
@@ -614,16 +661,21 @@ pub fn subgroup_object_ext_parsed(
 pub fn subgroup_object_ext_created(
     time: f64,
     stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
     object: &data::SubgroupObjectExt,
 ) -> Event {
     let mut object_data = json!({
-        "object_id_delta": object.object_id_delta,
-        "payload_length": object.payload_length,
-        "number_of_extension_headers": object.extension_headers.0.len(),
+        "group_id": group_id,
+        "subgroup_id": subgroup_id,
+        "object_id": object_id,
+        "extension_headers_length": object.extension_headers.0.len(),
+        "object_payload_length": object.payload_length,
     });
 
     if let Some(status) = object.status {
-        object_data["status"] = json!(format!("{:?}", status));
+        object_data["object_status"] = json!(format!("{:?}", status));
     }
 
     Event {
