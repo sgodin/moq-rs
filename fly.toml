@@ -13,25 +13,23 @@ MLOG_DIR="/tmp/mlog"
 [experimental]
 cmd = "./fly-relay.sh"
 
+# UDP: raw pass-through to WebTransport on 443
 [[services]]
-internal_port = 4443
-protocol = "udp"
+  protocol = "udp"
+  internal_port = 443
+  [[services.ports]]
+    port = 443
 
 [services.concurrency]
 hard_limit = 25
 soft_limit = 20
 
-[[services.ports]]
-port = "4443"
-
+# TCP: raw pass-through to HTTPS on 443 (TLS terminated by app)
 [[services]]
-internal_port = 4443
-protocol = "tcp"
-
-# Note: Port 443 passes raw TCP without protocol handling.
-# TLS termination is handled by the application itself.
-[[services.ports]]
-port = 443
+  protocol = "tcp"
+  internal_port = 443
+  [[services.ports]]
+    port = 443
 
 [services.concurrency]
 type = "connections"
