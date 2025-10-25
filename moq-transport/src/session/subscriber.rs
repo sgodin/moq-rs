@@ -8,6 +8,7 @@ use crate::{
     coding::{Decode, TrackNamespace},
     data,
     message::{self, Message},
+    mlog,
     serve::{self, ServeError},
 };
 
@@ -33,26 +34,34 @@ pub struct Subscriber {
     /// for each request (even numbers).  If we accepted an inbound QUIC connection then request id's start at 1 and
     /// increment by 2 for each request (odd numbers).
     next_requestid: Arc<atomic::AtomicU64>,
+
+    /// Optional mlog writer for logging transport events
+    mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
 }
 
 impl Subscriber {
-    pub(super) fn new(outgoing: Queue<Message>, next_requestid: Arc<atomic::AtomicU64>) -> Self {
+    pub(super) fn new(
+        outgoing: Queue<Message>,
+        next_requestid: Arc<atomic::AtomicU64>,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
+    ) -> Self {
         Self {
             announced: Default::default(),
             announced_queue: Default::default(),
             subscribes: Default::default(),
             outgoing,
             next_requestid,
+            mlog,
         }
     }
 
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) = Session::accept(session).await?;
+        let (session, _, subscriber) = Session::accept(session, None).await?;
         Ok((session, subscriber.unwrap()))
     }
 
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
-        let (session, _, subscriber) = Session::connect(session).await?;
+        let (session, _, subscriber) = Session::connect(session, None).await?;
         Ok((session, subscriber))
     }
 
@@ -193,6 +202,18 @@ impl Subscriber {
             stream_header.header_type
         );
 
+        // Log subgroup header parsed/received
+        if let Some(ref subgroup_header) = stream_header.subgroup_header {
+            if let Some(ref mlog) = self.mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let event = mlog::subgroup_header_parsed(time, stream_id, subgroup_header);
+                    let _ = mlog_guard.add_event(event);
+                }
+            }
+        }
+
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
@@ -201,7 +222,8 @@ impl Subscriber {
             id
         );
 
-        let res = self.recv_stream_inner(reader, stream_header).await;
+        let mlog = self.mlog.clone();
+        let res = self.recv_stream_inner(reader, stream_header, mlog).await;
         if let Err(SessionError::Serve(err)) = &res {
             log::warn!(
                 "[SUBSCRIBER] recv_stream: stream processing error for id={}: {:?}",
@@ -222,8 +244,8 @@ impl Subscriber {
         &mut self,
         reader: Reader,
         stream_header: data::StreamHeader,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
-        // No fetch support yet, so panic if fetch_header for now (via unwrap below)
         // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
         let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
         log::trace!(
@@ -259,7 +281,7 @@ impl Subscriber {
             //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
             Writer::Subgroup(subgroup) => {
                 log::trace!("[SUBSCRIBER] recv_stream_inner: receiving subgroup data");
-                Self::recv_subgroup(stream_header.header_type, subgroup, reader).await?
+                Self::recv_subgroup(stream_header.header_type, subgroup, reader, mlog).await?
             }
         };
 
@@ -274,6 +296,7 @@ impl Subscriber {
         stream_header_type: data::StreamHeaderType,
         mut subgroup_writer: serve::SubgroupWriter,
         mut reader: Reader,
+        mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
         log::debug!(
             "[SUBSCRIBER] recv_subgroup: starting - group_id={}, subgroup_id={}, priority={}",
@@ -283,6 +306,7 @@ impl Subscriber {
         );
 
         let mut object_count = 0;
+        let mut current_object_id = 0u64;
         while !reader.done().await? {
             log::trace!(
                 "[SUBSCRIBER] recv_subgroup: reading object #{} (has_ext_headers={})",
@@ -292,30 +316,79 @@ impl Subscriber {
 
             // Need to be able to decode the subgroup object conditionally based on the stream header type
             // read the object payload length into remaining_bytes
-            let mut remaining_bytes = match stream_header_type.has_extension_headers() {
-                true => {
-                    let object = reader.decode::<data::SubgroupObjectExt>().await?;
-                    log::debug!(
+            let (mut remaining_bytes, object_id_delta, status, decoded_object) =
+                match stream_header_type.has_extension_headers() {
+                    true => {
+                        let object = reader.decode::<data::SubgroupObjectExt>().await?;
+                        log::debug!(
                         "[SUBSCRIBER] recv_subgroup: object #{} with extension headers - object_id_delta={}, payload_length={}, status={:?}",
                         object_count + 1,
                         object.object_id_delta,
                         object.payload_length,
                         object.status
                     );
-                    object.payload_length
-                }
-                false => {
-                    let object = reader.decode::<data::SubgroupObject>().await?;
-                    log::debug!(
+                        let obj_copy = object.clone();
+                        (
+                            object.payload_length,
+                            object.object_id_delta,
+                            object.status,
+                            Some(obj_copy),
+                        )
+                    }
+                    false => {
+                        let object = reader.decode::<data::SubgroupObject>().await?;
+                        log::debug!(
                         "[SUBSCRIBER] recv_subgroup: object #{} - object_id_delta={}, payload_length={}, status={:?}",
                         object_count + 1,
                         object.object_id_delta,
                         object.payload_length,
                         object.status
                     );
-                    object.payload_length
+                        (
+                            object.payload_length,
+                            object.object_id_delta,
+                            object.status,
+                            None,
+                        )
+                    }
+                };
+
+            // Calculate absolute object_id from delta
+            current_object_id += object_id_delta;
+
+            // Log subgroup object parsed/received
+            if let Some(ref mlog) = mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let event = if let Some(obj_ext) = decoded_object {
+                        mlog::subgroup_object_ext_parsed(
+                            time,
+                            stream_id,
+                            subgroup_writer.info.group_id,
+                            subgroup_writer.info.subgroup_id,
+                            current_object_id,
+                            &obj_ext,
+                        )
+                    } else {
+                        // For non-extension objects, create a temporary SubgroupObject for logging
+                        let temp_obj = data::SubgroupObject {
+                            object_id_delta,
+                            payload_length: remaining_bytes,
+                            status,
+                        };
+                        mlog::subgroup_object_parsed(
+                            time,
+                            stream_id,
+                            subgroup_writer.info.group_id,
+                            subgroup_writer.info.subgroup_id,
+                            current_object_id,
+                            &temp_obj,
+                        )
+                    };
+                    let _ = mlog_guard.add_event(event);
                 }
-            };
+            }
 
             // TODO SLG - object_id_delta, extension headers and object status are being ignored and not passed on
 

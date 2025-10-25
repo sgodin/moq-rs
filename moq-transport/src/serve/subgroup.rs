@@ -7,8 +7,9 @@
 //! The reader can be cloned, in which case each reader receives a copy of each object. (fanout)
 //!
 //! The stream is closed with [ServeError::Closed] when all writers or readers are dropped.
-use bytes::Bytes;
 use std::{cmp, ops::Deref, sync::Arc};
+
+use bytes::Bytes;
 
 use crate::data::ObjectStatus;
 use crate::watch::State;

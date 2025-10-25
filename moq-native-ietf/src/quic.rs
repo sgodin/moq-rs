@@ -129,13 +129,13 @@ impl Endpoint {
 
 pub struct Server {
     quic: quinn::Endpoint,
-    accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<web_transport::Session>>>,
+    accept: FuturesUnordered<BoxFuture<'static, anyhow::Result<(web_transport::Session, String)>>>,
     qlog_dir: Option<Arc<PathBuf>>,
     base_server_config: Arc<quinn::ServerConfig>,
 }
 
 impl Server {
-    pub async fn accept(&mut self) -> Option<web_transport::Session> {
+    pub async fn accept(&mut self) -> Option<(web_transport::Session, String)> {
         loop {
             tokio::select! {
                 res = self.quic.accept() => {
@@ -143,10 +143,10 @@ impl Server {
                     let qlog_dir = self.qlog_dir.clone();
                     let base_server_config = self.base_server_config.clone();
                     self.accept.push(Self::accept_session(conn, qlog_dir, base_server_config).boxed());
-                }
+                },
                 res = self.accept.next(), if !self.accept.is_empty() => {
-                    match res.unwrap() {
-                        Ok(session) => return Some(session),
+                    match res? {
+                        Ok(result) => return Some(result),
                         Err(err) => log::warn!("failed to accept QUIC connection: {}", err),
                     }
                 }
@@ -158,9 +158,9 @@ impl Server {
         conn: quinn::Incoming,
         qlog_dir: Option<Arc<PathBuf>>,
         base_server_config: Arc<quinn::ServerConfig>,
-    ) -> anyhow::Result<web_transport::Session> {
+    ) -> anyhow::Result<(web_transport::Session, String)> {
         // Capture the original destination connection ID BEFORE accepting
-        // This is the actual QUIC CID that can be used for qlog correlation
+        // This is the actual QUIC CID that can be used for qlog/mlog correlation
         let orig_dst_cid = conn.orig_dst_cid();
         let connection_id_hex = orig_dst_cid.to_string();
 
@@ -245,7 +245,7 @@ impl Server {
             _ => anyhow::bail!("unsupported ALPN: {}", alpn),
         };
 
-        Ok(session.into())
+        Ok((session.into(), connection_id_hex))
     }
 
     pub fn local_addr(&self) -> anyhow::Result<net::SocketAddr> {

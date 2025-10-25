@@ -7,6 +7,8 @@ PORT = "443"
 RUST_LOG="info"
 # Qlog files for debugging (ephemeral - lost on restart)
 QLOG_DIR="/tmp/qlog"
+# Mlog files for MoQ Transport debugging (ephemeral - lost on restart)
+MLOG_DIR="/tmp/mlog"
 
 [experimental]
 cmd = "./fly-relay.sh"
