@@ -30,7 +30,6 @@ protocol = "tcp"
 
 [[services.ports]]
 port = 443
-handlers = ["tls", "http"]
 
 [services.concurrency]
 type = "connections"
