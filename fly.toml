@@ -28,9 +28,10 @@ port = "4443"
 internal_port = 4443
 protocol = "tcp"
 
+# Note: Port 443 passes raw TCP without protocol handling.
+# TLS termination is handled by the application itself.
 [[services.ports]]
 port = 443
-handlers = ["tls", "http"]
 
 [services.concurrency]
 type = "connections"
