@@ -296,7 +296,7 @@ impl Client {
             let mut rng = rand::thread_rng();
             let random_bytes: [u8; 16] = rng.gen();
             let cid = quinn::ConnectionId::new(&random_bytes);
-            *cid_capture_clone.lock().unwrap() = Some(cid.clone());
+            *cid_capture_clone.lock().unwrap() = Some(cid);
             cid
         }));
 
