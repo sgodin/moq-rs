@@ -64,7 +64,12 @@ async fn main() -> anyhow::Result<()> {
     })?;
 
     log::info!("connecting to relay: url={}", cli.url);
-    let (session, _connection_id) = quic.client.connect(&cli.url).await?;
+    let (session, connection_id) = quic.client.connect(&cli.url).await?;
+
+    log::info!(
+        "connected with CID: {} (use this to look up qlog/mlog on server)",
+        connection_id
+    );
 
     let (session, mut publisher) = Publisher::connect(session)
         .await
