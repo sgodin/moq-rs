@@ -1,4 +1,11 @@
-use std::{fs::File, io::BufWriter, net, path::PathBuf, sync::Arc, time};
+use std::{
+    fs::File,
+    io::BufWriter,
+    net,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time,
+};
 
 use anyhow::Context;
 use clap::Parser;
@@ -263,7 +270,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn connect(&self, url: &Url) -> anyhow::Result<web_transport::Session> {
+    pub async fn connect(&self, url: &Url) -> anyhow::Result<(web_transport::Session, String)> {
         let mut config = self.config.clone();
 
         // TODO support connecting to both ALPNs at the same time
@@ -279,6 +286,20 @@ impl Client {
         let mut config = quinn::ClientConfig::new(Arc::new(config));
         config.transport_config(self.transport.clone());
 
+        // Capture the initial destination CID that will be sent to the server
+        // This is the CID used for qlog/mlog correlation on the server side
+        let cid_capture: Arc<Mutex<Option<quinn::ConnectionId>>> = Arc::new(Mutex::new(None));
+        let cid_capture_clone = cid_capture.clone();
+        config.initial_dst_cid_provider(Arc::new(move || {
+            // Generate a random CID (Quinn's default behavior)
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let random_bytes: [u8; 16] = rng.gen();
+            let cid = quinn::ConnectionId::new(&random_bytes);
+            *cid_capture_clone.lock().unwrap() = Some(cid);
+            cid
+        }));
+
         let host = url.host().context("invalid DNS name")?.to_string();
         let port = url.port().unwrap_or(443);
 
@@ -291,12 +312,20 @@ impl Client {
 
         let connection = self.quic.connect_with(config, addr, &host)?.await?;
 
+        // Extract the CID that was used
+        let connection_id_hex = cid_capture
+            .lock()
+            .unwrap()
+            .as_ref()
+            .context("CID not captured")?
+            .to_string();
+
         let session = match url.scheme() {
             "https" => web_transport_quinn::connect_with(connection, url).await?,
             "moqt" => connection.into(),
             _ => unreachable!(),
         };
 
-        Ok(session.into())
+        Ok((session.into(), connection_id_hex))
     }
 }

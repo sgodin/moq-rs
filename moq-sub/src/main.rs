@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         tls,
     })?;
 
-    let session = quic.client.connect(&config.url).await?;
+    let (session, _connection_id) = quic.client.connect(&config.url).await?;
 
     let (session, subscriber) = moq_transport::session::Subscriber::connect(session)
         .await

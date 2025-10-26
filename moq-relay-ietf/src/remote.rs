@@ -214,7 +214,7 @@ impl RemoteProducer {
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
         // TODO reuse QUIC and MoQ sessions
-        let session = self.quic.connect(&self.url).await?;
+        let (session, _quic_client_initial_cid) = self.quic.connect(&self.url).await?;
         let (session, subscriber) = moq_transport::session::Subscriber::connect(session).await?;
 
         // Run the session
