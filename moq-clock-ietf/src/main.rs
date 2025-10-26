@@ -61,7 +61,12 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("connecting to server: url={}", config.url);
 
-    let session = quic.client.connect(&config.url).await?;
+    let (session, connection_id) = quic.client.connect(&config.url).await?;
+
+    log::info!(
+        "connected with CID: {} (use this to look up qlog/mlog on server)",
+        connection_id
+    );
 
     if config.publish {
         let (session, mut publisher) = Publisher::connect(session)

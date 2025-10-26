@@ -98,7 +98,7 @@ impl Relay {
 
         let forward = if let Some(url) = &self.announce {
             log::info!("forwarding announces to {}", url);
-            let session = self
+            let (session , _quic_client_initial_cid) = self
                 .quic
                 .client
                 .connect(url)
