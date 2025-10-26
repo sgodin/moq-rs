@@ -28,7 +28,12 @@ async fn main() -> anyhow::Result<()> {
         tls,
     })?;
 
-    let (session, _connection_id) = quic.client.connect(&config.url).await?;
+    let (session, connection_id) = quic.client.connect(&config.url).await?;
+
+    log::info!(
+        "connected with CID: {} (use this to look up qlog/mlog on server)",
+        connection_id
+    );
 
     let (session, subscriber) = moq_transport::session::Subscriber::connect(session)
         .await
