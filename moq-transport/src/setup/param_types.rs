@@ -4,8 +4,9 @@
 pub enum ParameterType {
     Path = 0x1,
     MaxRequestId = 0x2,
+    AuthorizationToken = 0x3,
     MaxAuthTokenCacheSize = 0x4,
-    AuthorizationToken = 0x5,
+    Authority = 0x5,
     MOQTImplementation = 0x7,
 }
 
