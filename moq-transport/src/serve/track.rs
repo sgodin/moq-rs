@@ -36,12 +36,12 @@ impl Track {
 
     pub fn produce(self) -> (TrackWriter, TrackReader) {
         // Create sharable TrackState and Info(Track)
-        let (writer_track_state, reader_tack_state) = State::default().split();
+        let (writer_track_state, reader_track_state) = State::default().split();
         let info = Arc::new(self);
 
         // Create TrackReader and TrackWriter with shared state and info
         let writer = TrackWriter::new(writer_track_state, info.clone());
-        let reader = TrackReader::new(reader_tack_state, info);
+        let reader = TrackReader::new(reader_track_state, info);
 
         (writer, reader)
     }

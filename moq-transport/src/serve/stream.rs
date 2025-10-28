@@ -74,7 +74,7 @@ impl StreamWriter {
     pub fn create(&mut self, group_id: u64) -> Result<StreamGroupWriter, ServeError> {
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
 
-        // Ensure group_id is larger thean (or equal to) the latest
+        // Ensure group_id is larger than (or equal to) the latest
         if let Some(latest_group_reader) = &state.latest_group_reader {
             if latest_group_reader.group_id > group_id {
                 return Err(ServeError::Duplicate);
