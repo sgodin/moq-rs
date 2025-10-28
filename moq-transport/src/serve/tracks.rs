@@ -74,8 +74,9 @@ impl TracksWriter {
         Some(writer)
     }
 
-    pub fn remove(&mut self, track: &str) -> Option<TrackReader> {
-        self.state.lock_mut()?.tracks.remove(track)
+    /// Remove a track from the broadcast by name.
+    pub fn remove(&mut self, track_name: &str) -> Option<TrackReader> {
+        self.state.lock_mut()?.tracks.remove(track_name)
     }
 }
 
@@ -144,28 +145,30 @@ impl TracksReader {
 
     /// Get or request a track from the broadcast by name.
     /// None is returned if [TracksWriter] or [TracksRequest] cannot fufill the request.
-    pub fn subscribe(&mut self, name: &str) -> Option<TrackReader> {
+    pub fn subscribe(&mut self, track_name: &str) -> Option<TrackReader> {
         let state = self.state.lock();
 
-        if let Some(track) = state.tracks.get(name) {
-            return Some(track.clone());
+        if let Some(track_reader) = state.tracks.get(track_name) {
+            return Some(track_reader.clone());
         }
 
         let mut state = state.into_mut()?;
-        let track = Track {
+        let track_writer_reader = Track {
             namespace: self.namespace.clone(),
-            name: name.to_owned(),
+            name: track_name.to_owned(),
         }
         .produce();
 
-        if self.queue.push(track.0).is_err() {
+        if self.queue.push(track_writer_reader.0).is_err() {
             return None;
         }
 
         // We requested the track sucessfully so we can deduplicate it.
-        state.tracks.insert(name.to_owned(), track.1.clone());
+        state
+            .tracks
+            .insert(track_name.to_owned(), track_writer_reader.1.clone());
 
-        Some(track.1.clone())
+        Some(track_writer_reader.1.clone())
     }
 }
 

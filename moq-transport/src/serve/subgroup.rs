@@ -41,7 +41,7 @@ impl Deref for Subgroups {
 
 // State shared between the writer and reader.
 struct SubgroupsState {
-    latest: Option<SubgroupReader>,
+    latest_subgroup_reader: Option<SubgroupReader>,
     epoch: u64, // Updated each time latest changes
     closed: Result<(), ServeError>,
 }
@@ -49,7 +49,7 @@ struct SubgroupsState {
 impl Default for SubgroupsState {
     fn default() -> Self {
         Self {
-            latest: None,
+            latest_subgroup_reader: None,
             epoch: 0,
             closed: Ok(()),
         }
@@ -59,9 +59,9 @@ impl Default for SubgroupsState {
 pub struct SubgroupsWriter {
     pub info: Arc<Track>,
     state: State<SubgroupsState>,
-    next: u64,          // Not in the state to avoid a lock
-    next_group_id: u64, // Not in the state to avoid a lock
-    last_group_id: u64, // Not in the state to avoid a lock
+    next_subgroup_id: u64, // Not in the state to avoid a lock
+    next_group_id: u64,    // Not in the state to avoid a lock
+    last_group_id: u64,    // Not in the state to avoid a lock
 }
 
 impl SubgroupsWriter {
@@ -69,7 +69,7 @@ impl SubgroupsWriter {
         Self {
             info: track,
             state,
-            next: 0,
+            next_subgroup_id: 0,
             next_group_id: 0,
             last_group_id: 0,
         }
@@ -88,7 +88,7 @@ impl SubgroupsWriter {
             subgroup_id = 0;
         } else {
             group_id = self.last_group_id;
-            subgroup_id = self.next;
+            subgroup_id = self.next_subgroup_id;
         }
 
         self.create(Subgroup {
@@ -98,6 +98,7 @@ impl SubgroupsWriter {
         })
     }
 
+    /// Create a new subgroup with the given parameters, inserting it into the track.
     pub fn create(&mut self, subgroup: Subgroup) -> Result<SubgroupWriter, ServeError> {
         let subgroup = SubgroupInfo {
             track: self.info.clone(),
@@ -109,26 +110,26 @@ impl SubgroupsWriter {
 
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
 
-        if let Some(latest) = &state.latest {
+        if let Some(latest) = &state.latest_subgroup_reader {
             // TODO: Check this logic again
             if writer.group_id.cmp(&latest.group_id) == cmp::Ordering::Equal {
                 match writer.subgroup_id.cmp(&latest.subgroup_id) {
                     cmp::Ordering::Less => return Ok(writer), // dropped immediately, lul
                     cmp::Ordering::Equal => return Err(ServeError::Duplicate),
-                    cmp::Ordering::Greater => state.latest = Some(reader),
+                    cmp::Ordering::Greater => state.latest_subgroup_reader = Some(reader),
                 }
             } else if writer.group_id.cmp(&latest.group_id) == cmp::Ordering::Greater {
-                state.latest = Some(reader);
+                state.latest_subgroup_reader = Some(reader);
             } else {
                 return Ok(writer); // drop here as well
             }
         } else {
-            state.latest = Some(reader);
+            state.latest_subgroup_reader = Some(reader);
         }
 
-        self.next = state.latest.as_ref().unwrap().subgroup_id + 1;
-        self.next_group_id = state.latest.as_ref().unwrap().group_id + 1;
-        self.last_group_id = state.latest.as_ref().unwrap().group_id;
+        self.next_subgroup_id = state.latest_subgroup_reader.as_ref().unwrap().subgroup_id + 1;
+        self.next_group_id = state.latest_subgroup_reader.as_ref().unwrap().group_id + 1;
+        self.last_group_id = state.latest_subgroup_reader.as_ref().unwrap().group_id;
         state.epoch += 1;
 
         Ok(writer)
@@ -162,9 +163,9 @@ pub struct SubgroupsReader {
 }
 
 impl SubgroupsReader {
-    fn new(state: State<SubgroupsState>, track: Arc<Track>) -> Self {
+    fn new(state: State<SubgroupsState>, track_info: Arc<Track>) -> Self {
         Self {
-            info: track,
+            info: track_info,
             state,
             epoch: 0,
         }
@@ -177,7 +178,7 @@ impl SubgroupsReader {
 
                 if self.epoch != state.epoch {
                     self.epoch = state.epoch;
-                    return Ok(state.latest.clone());
+                    return Ok(state.latest_subgroup_reader.clone());
                 }
 
                 state.closed.clone()?;
@@ -194,7 +195,7 @@ impl SubgroupsReader {
     pub fn latest(&self) -> Option<(u64, u64)> {
         let state = self.state.lock();
         state
-            .latest
+            .latest_subgroup_reader
             .as_ref()
             .map(|group| (group.group_id, group.latest()))
     }
@@ -286,7 +287,7 @@ pub struct SubgroupWriter {
     pub info: Arc<SubgroupInfo>,
 
     // The next object sequence number to use.
-    next: u64,
+    next_object_id: u64,
 }
 
 impl SubgroupWriter {
@@ -294,7 +295,7 @@ impl SubgroupWriter {
         Self {
             state,
             info: group,
-            next: 0,
+            next_object_id: 0,
         }
     }
 
@@ -311,13 +312,13 @@ impl SubgroupWriter {
     pub fn create(&mut self, size: usize) -> Result<SubgroupObjectWriter, ServeError> {
         let (writer, reader) = SubgroupObject {
             group: self.info.clone(),
-            object_id: self.next,
+            object_id: self.next_object_id,
             status: ObjectStatus::NormalObject,
             size,
         }
         .produce();
 
-        self.next += 1;
+        self.next_object_id += 1;
 
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
         state.objects.push(reader);
@@ -363,7 +364,7 @@ pub struct SubgroupReader {
 
     // The number of chunks that we've read.
     // NOTE: Cloned readers inherit this index, but then run in parallel.
-    index: usize,
+    read_index: usize,
 }
 
 impl SubgroupReader {
@@ -371,7 +372,7 @@ impl SubgroupReader {
         Self {
             state,
             info: subgroup,
-            index: 0,
+            read_index: 0,
         }
     }
 
@@ -397,9 +398,9 @@ impl SubgroupReader {
             {
                 let state = self.state.lock();
 
-                if self.index < state.objects.len() {
-                    let object = state.objects[self.index].clone();
-                    self.index += 1;
+                if self.read_index < state.objects.len() {
+                    let object = state.objects[self.read_index].clone();
+                    self.read_index += 1;
                     return Ok(Some(object));
                 }
 
@@ -414,7 +415,7 @@ impl SubgroupReader {
     }
 
     pub fn pos(&self) -> usize {
-        self.index
+        self.read_index
     }
 
     pub fn len(&self) -> usize {

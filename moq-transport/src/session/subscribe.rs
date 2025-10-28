@@ -156,7 +156,7 @@ impl SubscribeRecv {
 
         let mut subgroups = match writer {
             // TODO SLG - understand why both of these are needed, clock demo won't run if I comment out TrackWriteMode::Track
-            TrackWriterMode::Track(init) => init.groups()?,
+            TrackWriterMode::Track(track) => track.subgroups()?,
             TrackWriterMode::Subgroups(subgroups) => subgroups,
             _ => return Err(ServeError::Mode),
         };
