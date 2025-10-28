@@ -32,4 +32,8 @@ pub struct Cli {
     /// Only works if publish is false.
     #[arg(long)]
     pub track_status: bool,
+
+    /// Use datagrams instead of streams for the clock publisher.
+    #[arg(long)]
+    pub datagrams: bool,
 }
