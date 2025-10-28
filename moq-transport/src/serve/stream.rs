@@ -34,9 +34,9 @@ impl Deref for Stream {
 
 struct StreamState {
     // The latest group.
-    latest: Option<StreamGroupReader>,
+    latest_group_reader: Option<StreamGroupReader>,
 
-    // Updated each time objects changes.
+    // Updated each time object changes.
     epoch: usize,
 
     // Set when the writer is dropped.
@@ -46,7 +46,7 @@ struct StreamState {
 impl Default for StreamState {
     fn default() -> Self {
         Self {
-            latest: None,
+            latest_group_reader: None,
             epoch: 0,
             closed: Ok(()),
         }
@@ -70,36 +70,41 @@ impl StreamWriter {
         Self { state, info }
     }
 
+    /// Create a new group with the given group_id for the stream
     pub fn create(&mut self, group_id: u64) -> Result<StreamGroupWriter, ServeError> {
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
 
-        if let Some(latest) = &state.latest {
-            if latest.group_id > group_id {
+        // Ensure group_id is larger than (or equal to) the latest
+        if let Some(latest_group_reader) = &state.latest_group_reader {
+            if latest_group_reader.group_id > group_id {
                 return Err(ServeError::Duplicate);
             }
         }
 
+        // Create new StreamGroup
         let group = Arc::new(StreamGroup {
             stream: self.info.clone(),
             group_id,
         });
 
-        let (writer, reader) = State::default().split();
+        let (writer_state, reader_state) = State::default().split();
 
-        let reader = StreamGroupReader::new(reader, group.clone());
-        let writer = StreamGroupWriter::new(writer, group);
+        // Create StreamGroupWriter/StreamGroupReader pair
+        let stream_group_reader = StreamGroupReader::new(reader_state, group.clone());
+        let stream_group_writer = StreamGroupWriter::new(writer_state, group);
 
-        state.latest = Some(reader);
+        state.latest_group_reader = Some(stream_group_reader);
         state.epoch += 1;
 
-        Ok(writer)
+        Ok(stream_group_writer)
     }
 
+    /// Create a new group with the next sequential group_id for the stream.
     pub fn append(&mut self) -> Result<StreamGroupWriter, ServeError> {
         let next = self
             .state
             .lock()
-            .latest
+            .latest_group_reader
             .as_ref()
             .map(|g| g.group_id + 1)
             .unwrap_or_default();
@@ -129,7 +134,7 @@ impl Deref for StreamWriter {
 /// Notified when a stream has new data available.
 #[derive(Clone)]
 pub struct StreamReader {
-    // Modify the stream state.
+    // Mutable stream state.
     state: State<StreamState>,
 
     // Immutable stream state.
@@ -156,7 +161,7 @@ impl StreamReader {
                 let state = self.state.lock();
                 if self.epoch != state.epoch {
                     self.epoch = state.epoch;
-                    let latest = state.latest.clone().unwrap();
+                    let latest = state.latest_group_reader.clone().unwrap();
                     return Ok(Some(latest));
                 }
 
@@ -170,13 +175,18 @@ impl StreamReader {
         }
     }
 
-    // Returns the largest group/sequence
+    /// Returns the largest group_id/object_id
     pub fn latest(&self) -> Option<(u64, u64)> {
         let state = self.state.lock();
         state
-            .latest
+            .latest_group_reader
             .as_ref()
-            .map(|group| (group.group_id, group.latest()))
+            .map(|stream_group_reader| {
+                (
+                    stream_group_reader.group_id,
+                    stream_group_reader.latest_object_id(),
+                )
+            })
     }
 }
 
@@ -220,7 +230,7 @@ impl Default for StreamGroupState {
 pub struct StreamGroupWriter {
     state: State<StreamGroupState>,
     pub info: Arc<StreamGroup>,
-    next: u64,
+    next_object_id: u64,
 }
 
 impl StreamGroupWriter {
@@ -228,7 +238,7 @@ impl StreamGroupWriter {
         Self {
             state,
             info,
-            next: 0,
+            next_object_id: 0,
         }
     }
 
@@ -239,12 +249,13 @@ impl StreamGroupWriter {
         Ok(())
     }
 
+    /// Create a new object in the group with the given size.
     pub fn create(&mut self, size: usize) -> Result<StreamObjectWriter, ServeError> {
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
 
         let (writer, reader) = StreamObject {
             group: self.info.clone(),
-            object_id: self.next,
+            object_id: self.next_object_id,
             status: ObjectStatus::NormalObject,
             size,
         }
@@ -291,6 +302,7 @@ impl StreamGroupReader {
         }
     }
 
+    /// Read all remaining data from the current object, if any.
     pub async fn read_next(&mut self) -> Result<Option<Bytes>, ServeError> {
         if let Some(mut reader) = self.next().await? {
             Ok(Some(reader.read_all().await?))
@@ -299,6 +311,7 @@ impl StreamGroupReader {
         }
     }
 
+    /// Block until the next object is available.
     pub async fn next(&mut self) -> Result<Option<StreamObjectReader>, ServeError> {
         loop {
             {
@@ -318,7 +331,8 @@ impl StreamGroupReader {
         }
     }
 
-    pub fn latest(&self) -> u64 {
+    /// Returns the largest object_id
+    pub fn latest_object_id(&self) -> u64 {
         let state = self.state.lock();
         state
             .objects
@@ -353,11 +367,11 @@ pub struct StreamObject {
 
 impl StreamObject {
     pub fn produce(self) -> (StreamObjectWriter, StreamObjectReader) {
-        let (writer, reader) = State::default().split();
+        let (writer_state, reader_state) = State::default().split();
         let info = Arc::new(self);
 
-        let writer = StreamObjectWriter::new(writer, info.clone());
-        let reader = StreamObjectReader::new(reader, info);
+        let writer = StreamObjectWriter::new(writer_state, info.clone());
+        let reader = StreamObjectReader::new(reader_state, info);
 
         (writer, reader)
     }
@@ -396,7 +410,7 @@ pub struct StreamObjectWriter {
     pub info: Arc<StreamObject>,
 
     // The amount of promised data that has yet to be written.
-    remain: usize,
+    remaining_write_bytes: usize,
 }
 
 impl StreamObjectWriter {
@@ -404,17 +418,17 @@ impl StreamObjectWriter {
     fn new(state: State<StreamObjectState>, info: Arc<StreamObject>) -> Self {
         Self {
             state,
-            remain: info.size,
+            remaining_write_bytes: info.size,
             info,
         }
     }
 
     /// Write a new chunk of bytes.
     pub fn write(&mut self, chunk: Bytes) -> Result<(), ServeError> {
-        if chunk.len() > self.remain {
+        if chunk.len() > self.remaining_write_bytes {
             return Err(ServeError::Size);
         }
-        self.remain -= chunk.len();
+        self.remaining_write_bytes -= chunk.len();
 
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
         state.chunks.push(chunk);
@@ -437,7 +451,7 @@ impl StreamObjectWriter {
 impl Drop for StreamObjectWriter {
     // Make sure we fully write the segment, otherwise close it with an error.
     fn drop(&mut self) {
-        if self.remain == 0 {
+        if self.remaining_write_bytes == 0 {
             return;
         }
 
@@ -505,6 +519,7 @@ impl StreamObjectReader {
         }
     }
 
+    /// Read all remaining data from the current object, if any.
     pub async fn read_all(&mut self) -> Result<Bytes, ServeError> {
         let mut chunks = Vec::new();
         while let Some(chunk) = self.read().await? {

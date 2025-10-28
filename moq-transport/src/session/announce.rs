@@ -94,6 +94,7 @@ impl Announce {
         }
     }
 
+    /// Wait until a subscriber is received
     pub async fn subscribed(&self) -> Result<Option<Subscribed>, ServeError> {
         loop {
             {

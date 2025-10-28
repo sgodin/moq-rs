@@ -7,36 +7,42 @@ use moq_transport::serve::{
 use chrono::prelude::*;
 use tokio::task;
 
+/// Publishes the current time every second in the format "YYYY-MM-DD HH:MM:SS"
 pub struct Publisher {
-    track: SubgroupsWriter,
+    track_subgroups_writer: SubgroupsWriter,
 }
 
 impl Publisher {
-    pub fn new(track: SubgroupsWriter) -> Self {
-        Self { track }
+    pub fn new(track_subgroups_writer: SubgroupsWriter) -> Self {
+        Self {
+            track_subgroups_writer,
+        }
     }
 
+    /// Runs the publisher, sending the current time every second.  Creates a new group for each minute.
     pub async fn run(mut self) -> anyhow::Result<()> {
         let start = Utc::now();
         let mut now = start;
 
         // Just for fun, don't start at zero.
-        let mut sequence = start.minute();
+        let mut next_group_id = start.minute();
 
+        // Create a new group for each minute.
         loop {
-            let segment = self
-                .track
+            let subgroup_writer = self
+                .track_subgroups_writer
                 .create(Subgroup {
-                    group_id: sequence as u64,
+                    group_id: next_group_id as u64,
                     subgroup_id: 0,
                     priority: 0,
                 })
                 .context("failed to create minute segment")?;
 
-            sequence += 1;
+            next_group_id += 1;
 
+            // Spawn a new task to handle sending the object every second
             tokio::spawn(async move {
-                if let Err(err) = Self::send_segment(segment, now).await {
+                if let Err(err) = Self::send_subgroup_objects(subgroup_writer, now).await {
                     log::warn!("failed to send minute: {:?}", err);
                 }
             });
@@ -44,6 +50,7 @@ impl Publisher {
             let next = now + chrono::Duration::try_minutes(1).unwrap();
             let next = next.with_second(0).unwrap().with_nanosecond(0).unwrap();
 
+            // Sleep until the start of the next minute
             let delay = (next - now).to_std().unwrap();
             tokio::time::sleep(delay).await;
 
@@ -51,20 +58,21 @@ impl Publisher {
         }
     }
 
-    async fn send_segment(
-        mut segment: SubgroupWriter,
+    /// Sends the current time every second within a minute group.
+    async fn send_subgroup_objects(
+        mut subgroup_writer: SubgroupWriter,
         mut now: DateTime<Utc>,
     ) -> anyhow::Result<()> {
         // Everything but the second.
         let base = now.format("%Y-%m-%d %H:%M:").to_string();
 
-        segment
+        subgroup_writer
             .write(base.clone().into())
             .context("failed to write base")?;
 
         loop {
             let delta = now.format("%S").to_string();
-            segment
+            subgroup_writer
                 .write(delta.clone().into())
                 .context("failed to write delta")?;
 
@@ -73,6 +81,7 @@ impl Publisher {
             let next = now + chrono::Duration::try_seconds(1).unwrap();
             let next = next.with_nanosecond(0).unwrap();
 
+            // Sleep until the next second
             let delay = (next - now).to_std().unwrap();
             tokio::time::sleep(delay).await;
 
@@ -86,26 +95,35 @@ impl Publisher {
         }
     }
 }
+
+/// Subscribes to the clock and prints received time updates to stdout.
 pub struct Subscriber {
-    track: TrackReader,
+    track_reader: TrackReader,
 }
 
 impl Subscriber {
-    pub fn new(track: TrackReader) -> Self {
-        Self { track }
+    pub fn new(track_reader: TrackReader) -> Self {
+        Self { track_reader }
     }
 
+    /// Runs the subscriber, receiving time updates and printing them to stdout.
     pub async fn run(self) -> anyhow::Result<()> {
-        match self.track.mode().await.context("failed to get mode")? {
+        match self
+            .track_reader
+            .mode()
+            .await
+            .context("failed to get mode")?
+        {
             TrackReaderMode::Stream(stream) => Self::recv_stream(stream).await,
             TrackReaderMode::Subgroups(subgroups) => Self::recv_subgroups(subgroups).await,
             TrackReaderMode::Datagrams(datagrams) => Self::recv_datagrams(datagrams).await,
         }
     }
 
-    async fn recv_stream(mut track: StreamReader) -> anyhow::Result<()> {
-        while let Some(mut subgroup) = track.next().await? {
-            while let Some(object) = subgroup.read_next().await? {
+    /// Receives time updates from a stream and prints them to stdout.
+    async fn recv_stream(mut stream_reader: StreamReader) -> anyhow::Result<()> {
+        while let Some(mut stream_group_reader) = stream_reader.next().await? {
+            while let Some(object) = stream_group_reader.read_next().await? {
                 let str = String::from_utf8_lossy(&object);
                 println!("{str}");
             }
@@ -114,12 +132,14 @@ impl Subscriber {
         Ok(())
     }
 
-    async fn recv_subgroups(mut subgroups: SubgroupsReader) -> anyhow::Result<()> {
-        while let Some(mut subgroup) = subgroups.next().await? {
-            // Spawn a new task to handle the subgroup concurrently
+    /// Receives time updates from subgroups and prints them to stdout.
+    async fn recv_subgroups(mut subgroups_reader: SubgroupsReader) -> anyhow::Result<()> {
+        while let Some(mut subgroup_reader) = subgroups_reader.next().await? {
+            // Spawn a new task to handle the subgroup concurrently, so we
+            // don't rely on the publisher ending the previous stream before starting a new one.
             task::spawn(async move {
                 if let Err(e) = async {
-                    let base = subgroup
+                    let base = subgroup_reader
                         .read_next()
                         .await
                         .context("failed to get first object")?
@@ -127,7 +147,7 @@ impl Subscriber {
 
                     let base = String::from_utf8_lossy(&base);
 
-                    while let Some(object) = subgroup.read_next().await? {
+                    while let Some(object) = subgroup_reader.read_next().await? {
                         let str = String::from_utf8_lossy(&object);
                         println!("{base}{str}");
                     }
@@ -144,8 +164,9 @@ impl Subscriber {
         Ok(())
     }
 
-    async fn recv_datagrams(mut datagrams: DatagramsReader) -> anyhow::Result<()> {
-        while let Some(datagram) = datagrams.read().await? {
+    /// Receives time updates from datagrams and prints them to stdout.
+    async fn recv_datagrams(mut datagrams_reader: DatagramsReader) -> anyhow::Result<()> {
+        while let Some(datagram) = datagrams_reader.read().await? {
             let str = String::from_utf8_lossy(&datagram.payload);
             println!("{str}");
         }

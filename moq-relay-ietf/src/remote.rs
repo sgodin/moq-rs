@@ -17,6 +17,7 @@ use url::Url;
 
 use crate::Api;
 
+/// Information about remote origins.
 pub struct Remotes {
     /// The client we use to fetch/store origin information.
     pub api: Api,
@@ -55,6 +56,7 @@ impl RemotesProducer {
         Self { info, state }
     }
 
+    /// Block until the next remote requested by a consumer.
     async fn next(&mut self) -> Option<RemoteProducer> {
         loop {
             {
@@ -69,6 +71,7 @@ impl RemotesProducer {
         }
     }
 
+    /// Run the remotes producer to serve remote requests.
     pub async fn run(mut self) -> anyhow::Result<()> {
         let mut tasks = FuturesUnordered::new();
 
@@ -77,10 +80,13 @@ impl RemotesProducer {
                 Some(mut remote) = self.next() => {
                     let url = remote.url.clone();
 
+                    // Spawn a task to serve the remote
                     tasks.push(async move {
                         let info = remote.info.clone();
 
                         log::warn!("serving remote: {:?}", info);
+
+                        // Run the remote producer
                         if let Err(err) = remote.run().await {
                             log::warn!("failed serving remote: {:?}, error: {}", info, err);
                         }
@@ -88,6 +94,8 @@ impl RemotesProducer {
                         url
                     });
                 }
+
+                // Handle finished remote producers
                 res = tasks.next(), if !tasks.is_empty() => {
                     let url = res.unwrap();
 
@@ -120,6 +128,7 @@ impl RemotesConsumer {
         Self { info, state }
     }
 
+    /// Route to a remote origin based on the namespace.
     pub async fn route(
         &self,
         namespace: &TrackNamespace,
@@ -130,11 +139,13 @@ impl RemotesConsumer {
             Some(origin) => origin,
         };
 
+        // Check if we already have a remote for this origin
         let state = self.state.lock();
         if let Some(remote) = state.lookup.get(&origin.url).cloned() {
             return Ok(Some(remote));
         }
 
+        // Create a new remote for this origin
         let mut state = match state.into_mut() {
             Some(state) => state,
             None => return Ok(None),
@@ -145,9 +156,11 @@ impl RemotesConsumer {
             remotes: self.info.clone(),
         };
 
+        // Produce the remote
         let (writer, reader) = remote.produce();
         state.requested.push_back(writer);
 
+        // Insert the remote into our Map
         state.lookup.insert(origin.url, reader.clone());
 
         Ok(Some(reader))
@@ -223,6 +236,7 @@ impl RemoteProducer {
 
         let mut done = None;
 
+        // Serve requested tracks
         loop {
             tokio::select! {
                 track = self.next(), if done.is_none() => {
@@ -256,6 +270,8 @@ impl RemoteProducer {
         loop {
             let notify = {
                 let state = self.state.lock();
+
+                // Check if we have any requested tracks
                 if !state.requested.is_empty() {
                     return Ok(state
                         .into_mut()

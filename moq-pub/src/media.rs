@@ -31,11 +31,11 @@ impl Media {
         let catalog = broadcast
             .create(".catalog")
             .context("broadcast closed")?
-            .groups()?;
+            .subgroups()?;
         let init = broadcast
             .create("0.mp4")
             .context("broadcast closed")?
-            .groups()?;
+            .subgroups()?;
 
         Ok(Media {
             tracks: Default::default(),
@@ -333,7 +333,7 @@ struct Track {
 impl Track {
     fn new(track: TrackWriter, handler: TrackType, timescale: u64) -> Self {
         Self {
-            track: track.groups().unwrap(),
+            track: track.subgroups().unwrap(),
             current: None,
             timescale,
             handler,

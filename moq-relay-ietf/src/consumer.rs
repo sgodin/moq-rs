@@ -7,6 +7,7 @@ use moq_transport::{
 
 use crate::{Api, Locals, Producer};
 
+/// Consumer of tracks from a remote server.
 #[derive(Clone)]
 pub struct Consumer {
     remote: Subscriber,
@@ -30,11 +31,13 @@ impl Consumer {
         }
     }
 
+    /// Run the consumer to serve announce requests.
     pub async fn run(mut self) -> Result<(), SessionError> {
         let mut tasks = FuturesUnordered::new();
 
         loop {
             tokio::select! {
+                // Handle a new announce request
                 Some(announce) = self.remote.announced() => {
                     let this = self.clone();
 
@@ -42,6 +45,7 @@ impl Consumer {
                         let info = announce.clone();
                         log::info!("serving announce: {:?}", info);
 
+                        // Serve the announce request
                         if let Err(err) = this.serve(announce).await {
                             log::warn!("failed serving announce: {:?}, error: {}", info, err)
                         }
@@ -53,11 +57,14 @@ impl Consumer {
         }
     }
 
+    /// Serve an announce request.
     async fn serve(mut self, mut announce: Announced) -> Result<(), anyhow::Error> {
         let mut tasks = FuturesUnordered::new();
 
+        // Produce the tracks for this announce and return the reader
         let (_, mut request, reader) = Tracks::new(announce.namespace.clone()).produce();
 
+        // Start refreshing the API origin, if any
         if let Some(api) = self.api.as_ref() {
             let mut refresh = api.set_origin(reader.namespace.to_utf8_path()).await?;
             tasks.push(
@@ -68,8 +75,10 @@ impl Consumer {
         // Register the local tracks, unregister on drop
         let _register = self.locals.register(reader.clone()).await?;
 
+        // Accept the announce with an OK response
         announce.ok()?;
 
+        // Forward the announce, if needed
         if let Some(mut forward) = self.forward {
             tasks.push(
                 async move {
@@ -83,6 +92,7 @@ impl Consumer {
             );
         }
 
+        // Serve subscribe requests
         loop {
             tokio::select! {
                 // If the announce is closed, return the error
@@ -92,10 +102,12 @@ impl Consumer {
                 Some(track) = request.next() => {
                     let mut remote = self.remote.clone();
 
+                    // Spawn a new task to handle the subscribe
                     tasks.push(async move {
                         let info = track.clone();
                         log::info!("forwarding subscribe: {:?}", info);
 
+                        // Forward the subscribe request
                         if let Err(err) = remote.subscribe(track).await {
                             log::warn!("failed forwarding subscribe: {:?}, error: {}", info, err)
                         }

@@ -7,6 +7,7 @@ pub struct Queue<T> {
 }
 
 impl<T> Queue<T> {
+    /// Push an item onto the queue. Returns Err(item) if the queue has been closed.
     pub fn push(&mut self, item: T) -> Result<(), T> {
         match self.state.lock_mut() {
             Some(mut state) => state.push_back(item),
@@ -16,6 +17,7 @@ impl<T> Queue<T> {
         Ok(())
     }
 
+    /// Pop an item from the queue, waiting if necessary.
     pub async fn pop(&mut self) -> Option<T> {
         loop {
             {
@@ -43,6 +45,7 @@ impl<T> Queue<T> {
         res
     }
 
+    /// Split the queue into two handles that share the same underlying state.
     pub fn split(self) -> (Self, Self) {
         let state = self.state.split();
         (Self { state: state.0 }, Self { state: state.1 })

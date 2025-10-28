@@ -35,25 +35,29 @@ impl Track {
     }
 
     pub fn produce(self) -> (TrackWriter, TrackReader) {
-        let (writer, reader) = State::default().split();
+        // Create sharable TrackState and Info(Track)
+        let (writer_track_state, reader_track_state) = State::default().split();
         let info = Arc::new(self);
 
-        let writer = TrackWriter::new(writer, info.clone());
-        let reader = TrackReader::new(reader, info);
+        // Create TrackReader and TrackWriter with shared state and info
+        let writer = TrackWriter::new(writer_track_state, info.clone());
+        let reader = TrackReader::new(reader_track_state, info);
 
         (writer, reader)
     }
 }
 
 struct TrackState {
-    mode: Option<TrackReaderMode>,
+    /// The ReaderMode for this track. Set to None on creation.
+    reader_mode: Option<TrackReaderMode>,
+    /// Watchable closed state
     closed: Result<(), ServeError>,
 }
 
 impl Default for TrackState {
     fn default() -> Self {
         Self {
-            mode: None,
+            reader_mode: None,
             closed: Ok(()),
         }
     }
@@ -66,32 +70,41 @@ pub struct TrackWriter {
 }
 
 impl TrackWriter {
-    /// Create a track with the given name.
+    /// Create a track with the given name (info/Track)
     fn new(state: State<TrackState>, info: Arc<Track>) -> Self {
         Self { state, info }
     }
 
+    /// Create a new stream with the given priority, inserting it into the track.
     pub fn stream(self, priority: u8) -> Result<StreamWriter, ServeError> {
+        // Create new StreamWriter/StreamReader pair
         let (writer, reader) = Stream {
             track: self.info.clone(),
             priority,
         }
         .produce();
 
+        // Lock state to modify it
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
-        state.mode = Some(reader.into());
+
+        // Set the Stream mode to TrackReaderMode::Stream
+        state.reader_mode = Some(reader.into());
         Ok(writer)
     }
 
     // TODO: rework this whole interface for clarity?
-    pub fn groups(self) -> Result<SubgroupsWriter, ServeError> {
+    /// Create a new subgroups stream with the given priority, inserting it into the track.
+    pub fn subgroups(self) -> Result<SubgroupsWriter, ServeError> {
         let (writer, reader) = Subgroups {
             track: self.info.clone(),
         }
         .produce();
 
+        // Lock state to modify it
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
-        state.mode = Some(reader.into());
+
+        // Set the Stream mode to TrackReaderMode::Subgroups
+        state.reader_mode = Some(reader.into());
         Ok(writer)
     }
 
@@ -101,8 +114,11 @@ impl TrackWriter {
         }
         .produce();
 
+        // Lock state to modify it
         let mut state = self.state.lock_mut().ok_or(ServeError::Cancel)?;
-        state.mode = Some(reader.into());
+
+        // Set the Stream mode to TrackReaderMode::Datagrams
+        state.reader_mode = Some(reader.into());
         Ok(writer)
     }
 
@@ -137,11 +153,12 @@ impl TrackReader {
         Self { state, info }
     }
 
+    /// Get the current mode of the track, waiting if necessary.
     pub async fn mode(&self) -> Result<TrackReaderMode, ServeError> {
         loop {
             {
                 let state = self.state.lock();
-                if let Some(mode) = &state.mode {
+                if let Some(mode) = &state.reader_mode {
                     return Ok(mode.clone());
                 }
 
@@ -162,6 +179,7 @@ impl TrackReader {
         None
     }
 
+    /// Wait until the track is closed, returning the closing error.
     pub async fn closed(&self) -> Result<(), ServeError> {
         loop {
             {
