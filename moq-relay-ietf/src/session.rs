@@ -10,6 +10,7 @@ pub struct Session {
 }
 
 impl Session {
+    /// Run the session, producer, and consumer as necessary.
     pub async fn run(self) -> Result<(), SessionError> {
         let mut tasks = FuturesUnordered::new();
         tasks.push(self.session.run().boxed());

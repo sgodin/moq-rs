@@ -1,5 +1,6 @@
 use url::Url;
 
+/// API client for moq-api.
 #[derive(Clone)]
 pub struct Api {
     client: moq_api::Client,
@@ -14,12 +15,14 @@ impl Api {
         Self { client, origin }
     }
 
+    /// Set the origin for a given namespace, returning a refresher.
     pub async fn set_origin(&self, namespace: String) -> Result<Refresh, moq_api::ApiError> {
         let refresh = Refresh::new(self.client.clone(), self.origin.clone(), namespace);
         refresh.update().await?;
         Ok(refresh)
     }
 
+    /// Get the origin for a given namespace.
     pub async fn get_origin(
         &self,
         namespace: &str,
@@ -28,6 +31,7 @@ impl Api {
     }
 }
 
+/// Periodically refreshes the origin registration in moq-api.
 pub struct Refresh {
     client: moq_api::Client,
     origin: moq_api::Origin,
@@ -37,6 +41,7 @@ pub struct Refresh {
 
 impl Refresh {
     fn new(client: moq_api::Client, origin: moq_api::Origin, namespace: String) -> Self {
+        // Refresh every 5 minutes
         let duration = tokio::time::Duration::from_secs(300);
         let mut refresh = tokio::time::interval(tokio::time::Duration::from_secs(300));
         refresh.reset_after(duration); // skip the first tick
@@ -49,18 +54,20 @@ impl Refresh {
         }
     }
 
+    /// Update the origin registration in moq-api.
     async fn update(&self) -> Result<(), moq_api::ApiError> {
-        // Register the origin in moq-api.
         log::debug!(
             "registering origin: namespace={} url={}",
             self.namespace,
             self.origin.url
         );
+        // Register the origin in moq-api.
         self.client
             .set_origin(&self.namespace, self.origin.clone())
             .await
     }
 
+    /// Run the refresher loop.
     pub async fn run(&mut self) -> anyhow::Result<()> {
         loop {
             self.refresh.tick().await;
@@ -69,6 +76,7 @@ impl Refresh {
     }
 }
 
+/// Unregister the origin on drop.
 impl Drop for Refresh {
     fn drop(&mut self) {
         // TODO this is really lazy

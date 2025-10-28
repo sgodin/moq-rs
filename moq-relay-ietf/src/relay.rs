@@ -8,6 +8,7 @@ use url::Url;
 
 use crate::{Api, Consumer, Locals, Producer, Remotes, RemotesConsumer, RemotesProducer, Session};
 
+/// Configuration for the relay.
 pub struct RelayConfig {
     /// Listen on this address
     pub bind: net::SocketAddr,
@@ -32,9 +33,10 @@ pub struct RelayConfig {
     pub node: Option<Url>,
 }
 
+/// MoQ Relay server.
 pub struct Relay {
     quic: quic::Endpoint,
-    announce: Option<Url>,
+    announce_url: Option<Url>,
     mlog_dir: Option<PathBuf>,
     locals: Locals,
     api: Option<Api>,
@@ -42,8 +44,8 @@ pub struct Relay {
 }
 
 impl Relay {
-    // Create a QUIC endpoint that can be used for both clients and servers.
     pub fn new(config: RelayConfig) -> anyhow::Result<Self> {
+        // Create a QUIC endpoint that can be used for both clients and servers.
         let quic = quic::Endpoint::new(quic::Config {
             bind: config.bind,
             qlog_dir: config.qlog_dir,
@@ -61,6 +63,7 @@ impl Relay {
             log::info!("mlog output enabled: {}", mlog_dir.display());
         }
 
+        // Create an API client if we have the necessary configuration
         let api = if let (Some(url), Some(node)) = (config.api, config.node) {
             log::info!("using moq-api: url={} node={}", url, node);
             Some(Api::new(url, node))
@@ -70,6 +73,7 @@ impl Relay {
 
         let locals = Locals::new();
 
+        // Create remotes if we have an API client
         let remotes = api.clone().map(|api| {
             Remotes {
                 api,
@@ -80,7 +84,7 @@ impl Relay {
 
         Ok(Self {
             quic,
-            announce: config.announce,
+            announce_url: config.announce,
             mlog_dir: config.mlog_dir,
             api,
             locals,
@@ -88,22 +92,29 @@ impl Relay {
         })
     }
 
+    /// Run the relay server.
     pub async fn run(self) -> anyhow::Result<()> {
         let mut tasks = FuturesUnordered::new();
 
+        // Start the remotes producer task, if any
         let remotes = self.remotes.map(|(producer, consumer)| {
             tasks.push(producer.run().boxed());
             consumer
         });
 
-        let forward = if let Some(url) = &self.announce {
+        // Start the forwarder, if any
+        let forward_producer = if let Some(url) = &self.announce_url {
             log::info!("forwarding announces to {}", url);
+
+            // Establish a QUIC connection to the forward URL
             let (session, _quic_client_initial_cid) = self
                 .quic
                 .client
                 .connect(url)
                 .await
                 .context("failed to establish forward connection")?;
+
+            // Create the MoQ session over the connection
             let (session, publisher, subscriber) =
                 moq_transport::session::Session::connect(session, None)
                     .await
@@ -120,20 +131,22 @@ impl Relay {
                 consumer: Some(Consumer::new(subscriber, self.locals.clone(), None, None)),
             };
 
-            let forward = session.producer.clone();
+            let forward_producer = session.producer.clone();
 
             tasks.push(async move { session.run().await.context("forwarding failed") }.boxed());
 
-            forward
+            forward_producer
         } else {
             None
         };
 
+        // Start the QUIC server loop
         let mut server = self.quic.server.context("missing TLS certificate")?;
         log::info!("listening on {}", server.local_addr()?);
 
         loop {
             tokio::select! {
+                // Accept a new QUIC connection
                 res = server.accept() => {
                     let (conn, connection_id) = res.context("failed to accept QUIC connection")?;
 
@@ -143,10 +156,13 @@ impl Relay {
 
                     let locals = self.locals.clone();
                     let remotes = remotes.clone();
-                    let forward = forward.clone();
+                    let forward = forward_producer.clone();
                     let api = self.api.clone();
 
+                    // Spawn a new task to handle the connection
                     tasks.push(async move {
+
+                        // Create the MoQ session over the connection (setup handshake etc)
                         let (session, publisher, subscriber) = match moq_transport::session::Session::accept(conn, mlog_path).await {
                             Ok(session) => session,
                             Err(err) => {
@@ -155,6 +171,7 @@ impl Relay {
                             }
                         };
 
+                        // Create our MoQ relay session
                         let session = Session {
                             session,
                             producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes)),
