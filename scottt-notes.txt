@@ -1,0 +1,489 @@
+Needed to install NASM:
+https://www.nasm.us/
+
+and setup path to point to:
+C:\Users\slgod\AppData\Local\bin\NASM
+
+Need to install clag for windows:
+https://github.com/vovkos/llvm-package-windows/releases/download/clang-master/clang-13.0.0-windows-amd64-msvc15-msvcrt.7z
+
+and setup new env variable:
+LIBCLANG_PATH to point to unzip clang/bin path
+
+cargo build
+executables will be built to target/debug
+
+
+
+Running Clock Demo:
+Start Relay (PowerShell):
+$env:RUST_LOG = "debug"; & ./moq-relay-ietf --tls-cert domain_cert_localhost.pem --tls-key domain_key_localhost.pem --tls-disable-verify
+$env:RUST_LOG = "trace"; & ./moq-relay-ietf --tls-cert domain_cert_localhost.pem --tls-key domain_key_localhost.pem --qlog-dir qlog --qlog-serve --mlog-dir mlog --mlog-serve --tls-disable-verify
+
+Start Publisher:
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf https://localhost --publish --tls-root root_cert_resipCA.pem --tls-disable-verify
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://localhost --publish --tls-root root_cert_resipCA.pem --tls-disable-verify
+$env:RUST_LOG = "trace"; & ./moq-clock-ietf https://localhost --publish --tls-root root_cert_resipCA.pem --tls-disable-verify
+
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://lminiero.it:9000 --publish --tls-root root_cert_resipCA.pem --tls-disable-verify --bind 192.168.1.28:0
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://fly-moq-relay.englishm.net --publish --tls-root root_cert_resipCA.pem --tls-disable-verify --bind 192.168.1.28:0
+
+Start Subscriber:
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf https://localhost --tls-root root_cert_resipCA.pem --tls-disable-verify
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://localhost --tls-root root_cert_resipCA.pem --tls-disable-verify
+$env:RUST_LOG = "trace"; & ./moq-clock-ietf https://localhost --tls-root root_cert_resipCA.pem --tls-disable-verify
+
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://lminiero.it:9000 --tls-root root_cert_resipCA.pem --tls-disable-verify --bind 192.168.1.28:0
+$env:RUST_LOG = "debug"; & ./moq-clock-ietf moqt://fly-moq-relay.englishm.net --tls-root root_cert_resipCA.pem --tls-disable-verify --bind 192.168.1.28:0
+
+Pre-commit
+cargo test
+cargo clippy --no-deps
+cargo fmt
+cargo machete
+
+
+How to Get Fly logs:
+https://fly-moq-relay.englishm.net/mlog/24db327a77bf60a44262c9fb5ae0ed6e
+
+Main TODO's to get code back to previous functionality level:
+- track status handling needs adjustment for new messaging changes
+- update SessionError list for draft-13
+- subscribe handling needs adjustment for new messaging, especially around track_alias handling - IN PROGRESS
+- mapping datagrams to subscriptions needs to be fixed up - DONE
+
+
+Other notable TODO's
+- eventually remove String in favor of bounded_string
+- refactor encoding such that message length can be written to buffer after encoding to avoid copies
+- validate control message length fields
+- consider creating a FullTrackName struct that limits to total length to 4096 as specified in RFC
+- add Enum for SubscribeDone StatusCodes
+- look for payload size limit in draft and apply
+- Implement Fetch streams and fetching
+
+
+moq-clock-ietf
+Publisher
+- Publisher::connect
+- serve::Tracks::produce -> TracksWriter, TracksReader - uses Namespace
+- TracksWriter::create -> TrackWriter - uses TrackName
+- clock::Publisher::new(TrackWriter::subgroups() -> SubgroupsWriter)
+- tokio::select
+  - Session::run() - sending of control messages, receiving and processing of inbound uni QUIC streams and datagrams
+  - clock::Publisher::run() - uses SubgroupsWriter
+    - SubgroupsWriter::create - creates a new SubGroup in the track -> SubgroupWriter
+	- sends 10 seconds of subgroup objects, then repeat above, uses SubgroupWriter::write to send bytes
+  - Publisher.announce(TracksReader)
+    - Announce::new
+	- tokio::select
+	  - Wait for Subscribes to arrive -> Publisher::serve_subscribe
+	  - Wait for Track Status Requests to arrive -> Publisher::server_track_status
+	  - Process subscribe and status tasks
+Subscriber
+- Subscriber::connect
+- serve::Track::new(namespace, name).produce() -> TrackWriter, TrackReader
+- clock::Subscriber::new(TrackReader)
+- tokio::select
+  - Session::run() - sending of control messages, receiving and processing of inbound uni QUIC streams and datagrams
+  - clock::Subscriber::run()
+    - wait until track mode is known - ie. first object appears for subscription, then one of
+	  - recv_stream(StreamReader)
+	    - StreamReader::next -> StreamGroupReader
+		- StreamGroupReader::read_next() -> Bytes
+	  - recv_subgroups(SubgroupsReader)
+	    - SubgroupsReader::next -> SubgroupReader
+		- SubgroupReader::read_next -> Bytes
+	  - recv_datagrams(DatagramsReader)
+	    - DatagramsReader::read() -> Datagram
+  - Subscriber.subscribe(TrackWriter)
+    - Subscribe::new -> Subscribe, SubscribeRecv
+	- add SubscribeRecv to Hashmap
+	- wait for closed
+
+moq-transport reception of new stream:
+- Session::run_streams calls WebTransport::accept_uni()
+  - Subscriber::recv_stream
+    - if one of the Subgroup headers -> SubscribeRecv::subgroup -> SubgroupWriter
+
+moq-transport create of new outbound streams WebTransport::open_uni()
+- Publisher::open_uni called from Subscribed::serve_subgroup
+
+
+Unused Serve Structs
+-broadcast.rs
+-ojbect.rs
+
+
+Canonical Object Properties
+---------------------------
+TrackNamespace
+TrackName
+GroupID
+ObjectID
+PublisherPriority
+ObjectForwardingPreference
+SubgroupID
+ObjectStatus
+ObjectExtensions
+ObjectPayload
+
+
+Intersting code:
+
+To read a param and ensure it is present...
+        let role = params
+            .get::<Role>(0)?
+            .ok_or(DecodeError::MissingParameter)?;
+
+
+
+moq-transport\src\coding
+- Decode trait
+    - fn decode<B: bytes::Buf>(buf: &mut B) -> Result<Self, DecodeError>;
+  - DecodeError enum
+- Encode trait
+  - encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError>;
+  - EncodeError enum
+- Params tuple struct HashMap<u64, Vec<u8>>
+  - Encode, Decode, net, set, has, get
+- String - implementation of Decode and Encode traits
+- Tuple struct
+  - fields Vec<TupleField>
+  - Encode, Decode, new, add, get, set, clear, from_utf8_path, to_utf8_path
+- TupleField struct
+  - value Vec<u8>
+  - Decode, Encode, new, from_utf8, set, get
+- VarInt tuple struct u64
+  - Decode, Encode
+  - Decode/Encode for u64, usize, u8
+
+moq-transport\src\message
+- Announce, AnnounceCancel, AnnounceError, AnnounceOk
+- Fetch, FetchCancel, FetchError, FetchOk
+- GoAway
+- Subscribe, SubscribeOk, SubscribeUpdate, SubscribeDone, SubscribeError
+- SubscribeNamespace, SubscribeNamespaceOk, SubscribeNamespaceError
+- TrackStatusRequest, TrackStatus
+- Unannounce, UnsubscribeNamespace, Unsubscribe
+- FilterType enum (LatestGroup, LatestObject, AbsoluteStart, AbsoluteRange)
+- GroupOrder enum (Publisher, Ascending, Descending)
+- MaxSubscribeId struct (id: u64)
+- Message enum (generated via macro_rules)
+  - Decode, Encode, id, name
+- TrackStatusCode enum (InProgress, DoesNotExist, NotYetBegun, Finished, Relay)
+  - Decode, Encode
+- Publisher enum (Announce, Unannounce, SubscribeOk, SubscribeError, SubscribeDone, MaxSubscribeId, TrackStatus, FetchOk, FetchError)
+- Subscriber enum (AnnounceOk/Error/Cancel, Subscribe, Unsubscribe, SubscribeUpdate, TrackStatusRequest, SubscribeNamespace/Ok/Error,
+                   UnsubscribeNamespace, Fetch, FetchCancel)
+
+moq-transport\src\data
+- Header enum (Track, Subgroup)
+- TrackHeader struct (subscribe_id, track_alias, publisher_priority)
+- TrackObject struct (group_id, object_id, size, status)
+- SubgroupHeader struct (subscribe_id, track_alias, group_id, subgroup_id, publisher_priority)
+- SubgroupObject struct (object_id, size, status)
+- Datagram struct (subscribe_id, track_alias, group_id, object_id, publisher_priority, object_status, payload_len, payload)
+
+moq-transport\src\serve
+- Stream
+  - Stream struct - a stream broken into groups, single priority for all groups
+    - Arc<Track> - Namespace/Name
+	- priority
+	- latest_group - StreamGroupReader
+	- epoch
+	- StreamWriter::create - creates a new StreamGroupReader/Writer group with the given group_id - returns StreamGroupWriter
+	- StreamWriter::append - creates a new StreamGroupReader/Writer group with the next group_id
+	- StreamWriter::close - close the stream with an error
+    - StreamReader::next - block until the next group is available - returns StreamGroupReader
+	- StreamReader::latest - returns the largest group_id/object_id
+  - StreamGroup struct
+    - Arc<Track> - Namespace/Name
+	- priority
+	- group_id
+	- Vec<StreamObjectReader> - the objects that have been received thus far
+	- StreamGroupWriter::next_object_id
+	- StreamGroupWriter::write - add a new object to the group
+	- StreamGroupWriter::create - Create a new object in teh group with a given size
+	- StreamGroupReader::index - starts at 0 and goes up for each object read
+	- StreamGroupReader::read_next - read all remaining data from the current object
+	- StreamGroupReader::next - block until the next object is available
+	- StreamGroupReader::latest - returns the latest object_id
+  - StreamObject struct
+    - group - the StreamGroup the object belongs to
+	- object_id
+	- size
+	- status
+	- chunks: Vec<Bytes> - data received thus far
+	- StreamObjectWriter::write - write a new chunck of bytes
+	- StreamObjectWriter::close
+	- StreamObjectReader::read - block until the next chunk of bytes is available
+	- StreamObjectReader::read_all - read all remaining data for the current object
+
+- Track
+  - Track struct
+    - namespace
+	- name
+	- mode - the TrackReaderMode for this track
+	- TrackWriter::stream - creates a new Stream with the given priority - returns StreamWriter
+	- TrackWriter::subgroups - creates a new Subgroups stream - returns SubgroupsWriter
+	- TrackWriter::datagrams - creates a new Datagram stream - returns DatagramsWriter
+	- TrackWriter::close
+	- TrackReader::mode - get the current mode of the track, waiting if necessary
+	- TrackReader::latest - TODO
+	- TrackReader::closed - wait until the track is closed
+  - TrackReaderMode enum (Stream, Subgroups, Datagrams)
+  - TrackWriterMode enum (Track, Stream, Subgroups, Objects, Datagrams)
+
+- Tracks struct
+  - namespace
+  - tracks HashMap<String, TrackReader>
+  - TracksWriter::create - Create a new track with a given name
+  - TracksWriter::remove
+
+- TrackRequest
+  - tracks HashMap<String, TrackReader>
+  - incoming Queue<TrackWriter>
+  - namespace
+  - next() - wait for a request to create a new track
+  - TracksReader::subscribe(name) - Get or request a track from the broadcast by name - returns TrackReader
+
+
+
+
+
+
+
+- Datagram
+  - Datagrams struct (track: Arc<Track>)
+    - produce method returns DatagramWriter and DatagramReader
+  - DatagramsState struct (latest: Option<Datagram>, epoch, closed)
+  - DatagramsWriter struct (DatagramsState, Arc<Track>)
+    - write, close
+  - DatagramsReader struct (DatagramsState, Arc<Track>)
+    - read, latest
+  - Datagram struct (group_id, object_id, priority, status, payload)
+  - ServeError enum (Done, Cancel, Closed, NotFound, Duplicate, Mode, Size, Internal)
+- Object
+  - Objects struct (Arc<Track>)
+    - produce method returns ObjectsWriter and ObjectsReader
+  - ObjectState struct (objects: Vec<ObjectReader>, epoch, closed)
+  - ObjectsWriter struct (ObjectState, Arc<Track>)
+    - write, create, close
+  - ObjectsReader struct (ObjectsState, Arc<Track>, epoch, pending: BinaryHeap<ObjectReader>)
+    - next, latest
+- Subgroup
+  - Subgroups struct (Arc<Track>) -> SubgroupsWriter, SubgroupsReader
+  - Subgroup struct (group_id, subgroup_id, priority)
+  - SubgroupInfo struct (Arc<Track>, group_id, subgroup_id, priority) -> SubgroupWriter, SubgroupReader
+  - SubgroupObject struct (Arc<SubgroupInfo>, object_id, size, status) -> SubgroupObjectWriter, SubgroupObjectReader
+- Broadcast - UNUSED
+  - Broadcast struct (namespace) A broadcast is a collection of tracks, split into two handles: [Writer] and [Reader]
+    - produce method returns BroadcastWriter and BroadcastReader
+  - BroadcastState struct (tracks: HashMap<String, TrackReader>, closed Result)
+    - get, insert, remove
+  - BroadcastWriter struct (BroadcastState, info: Broadcast)
+    - create_track, remove_track, close
+  - BroadcastReader struct (BroadcastState, info: Broadcast)
+    - get_track
+
+moq-transport\src\session
+- Session (mod.rs)
+  - Session struct (web_tranport::Session; quinn vs wasm, Writer, Reader, Publisher, Subscriber, outgoing: Queue<Message>)
+    - async
+    - connect, accept, run
+	- connect -> Session, Publisher, Subscriber
+	  - Opens QUIC bi-directional control stream
+	  - Sends ClientSetup and receives ServerSetup
+	  - Creates Session instance
+	    - Has Control stream Sender/Recvr
+		- Has Publisher and Subscriber to handle messaging
+		- Has a common message queue for sending messages
+    - accept -> Session, Publisher, Subscriber
+	  - Accepts QUIC bi-directional control stream
+	  - Receives ClientSetup and sends ServerSetup
+	  - Creates Session Instance
+	    - Has Control stream Sender/Recvr
+		- Has Publisher and Subscriber to handle messaging
+		- Has a common message queue for sending messages
+	- run - async
+	  - Spawns 4 tasks
+		- run_send(control_sender, outgoing_queue)
+		  - processes outgoing queue, and sends queued messages on control stream sender/writer
+	    - run_recv
+		  - Receives inbound messages from the control stream reader/receiver.  Analyzes if the message
+            is to be handled by Subscriber or Publisher logic and calls recv_message on either the
+            Publisher or Subscriber.
+		- run_streams
+		  - Accpets uni-directional QUIC streams
+		  - Calls Subscriber::recv_stream and adds returned closure to tasks processed here
+		    - Subscriber::recv_stream processes stream header
+			- returns closure created by Subscriber::recv_stream_inner
+			  - examins track header and creates either a Writer::Track or Writer::Subgroup for writing received objects to subscriber
+		- run_datagrams
+		  - receives a datagram from the QUIC connection
+		  - calls Subscriber::recv_datagram
+  - SessionError enum
+- Announce
+  - AnnounceInfo struct (namespace)
+  - AnnounceState struct (VecDeque<Subscribed>, VecDeque<TrackStatusRequested>, ok , closed)
+  - Announce struct (Publisher, AnnounceState, AnnounceInfo) -> AnnounceRecv
+    - closed, subscribed, track_status_requested, wait_for_ok
+  - AnnounceRecv struct (AnnounceState)
+    - recv_ok
+    - recv_error
+    - recv_subscribe
+  - Announced struct (Subscriber, AnnouncedState, AnnounceInfo, ok, error) -> AnnouncedRecv
+    - ok, closed, close
+- Publisher struct (web_tranport::Session; quinn vs wasm, announces HaspMap, subscribed HashMap, unknown: Queue<Subscribed>, outgoing: Queue<Message>)
+  - accept, connect, annouce, serve_subscribe, serve_track_status, subscribed, recv_message, recv_announce_ok/error/cancel,
+    recv_subscribe, etc..., send_message, drop_subscribe, drop_announce, open_uni, send_datagram
+    - TODO fill in details of above  ****************
+- Subscribe
+  - SubscribeInfo struct (namespace, name)
+  - SubscribeState struct (ok , closed)
+  - Subscribe struct (Subscriber, SubscribeState, SubscribeInfo, id) -> SubscribeRecv
+    - new, closed
+  - SubscribeRecv struct (SubscribeState, TrackWriterMode)
+    - ok, error, track, subgroup, datagram
+  - Subscribed struct (Publisher, SubscribedState, message::Subscribe, ok, SubscribeInfo) -> SubscribedRecv
+    - serv, close, closed
+- Subscriber struct (announced HashMap, announced_queue: Queue<Announced>, subscribes HashMap, subscribe_next: AtomicU64, outgoing: Queue<Message>)
+  - accept, connect, announced, subscribe, send_message, recv_message, recv_annouce, etc..., recv_stream, recv_track, recv_subgroup, recv_datagram
+    - TODO fill in details of above  ****************
+- TrackStatusRequestedInfo struct (namespace, track: String)
+- TrackStatusRequested struct (Publisher, TrackStatusRequestedInfo)
+- Reader struct (web_transport::RecvStream, buffer: BytesMut)
+  - decode, read_chunk, done
+- Writer struct (web_transport::SendStream, buffer: BytesMut)
+  - encode, write
+
+moq-transport\src\setup
+- Version struct (u64)
+- Versions struct (Vec<Version>)
+- Role enum (Publisher, Subscriber, Both)
+- Client struct (Versions, Role, Params)
+- Server struct (Version, Role, Params)
+
+moq-transport\src\util
+- Queue<T> struct (Watch<VecDeque<T>>) - TODO replace with mpsc
+  - pop, push
+- State<T> (Arc<Mutex<StateInner>>, StateDrop) - appears to implement an observable state tracker
+  - lock, lock_mut, downgrade
+  - StateInner<T> struct (value: T, Vec<task:Waker>, epoch, dropped)
+    - register, notify
+  - StateRef struct
+  - StateChanged<T> struct
+  - etc...
+ - Watch<T> struct (Arc<Mutex<State<T>>>) - seems similar to above State<T> struct
+  - WatchChanged<T> struct (Arc<Mutext<State<T>>>, epoch)
+
+moq-transport\src\watch
+- Queue<T> struct (State<VecDeque<T>>)
+  - push, pop, close, split
+- State<T> struct (Arc<Mutex<StateInner<T>>>, StateDrop)
+
+moq-native-ietf
+- Args struct (bind: SockAddr, tls::Args)
+- Config struct (bind: SockAddr, tls::Config)
+- Endpoint struct (Client, Option<Server>)
+  - new - create new quinn::Endpoint -> Client, Server
+- Server struct (quinn::Endpoint, accept Future?)
+  - accept - calls accept on quinn and adds future to accept list
+  - accept_session -> web_transport::Session - accepts, does alpn stuff, handles web_transport connect message
+  - local_addr - returns net::SockAddr
+- Client struct (quinn::Endpoint, rusttls::ClientConfig, quinn::TransportConfig)
+  - connect - DNS lookup, quin::connect_with, web_transport connect if https vs moqt scheme
+
+moq-dir
+- Aggregates announcements, used to discover broadcasts.
+- Aggregate all announcements received with this namespace prefix.
+  The list of announcements that match are available as tracks, ending with /.
+  ex. ANNOUNCE namespace=public/meeting/12342/alice
+  ex. TRACK    namespace=public/ name=meeting/12342/ payload=alice
+- Session struct (web_transport::Session, Listings)
+  - serve_subscriber task - calls Publisher::announce
+  - serve_publisher task - calls Subscriber::announced, starts new task server_announce
+  - serve_announce task - calls Listings.register
+
+moq-api
+- A HTTP API server that stores the origin for each broadcast, backed by redis.
+- Uses redis and supports REST API's: get_origin, set_origin, delete_origin, patch_origin
+
+moq-relay
+-main.rs
+  -creates a Relay
+  -creates a web server
+-Relay.rs
+  -create a QUIC endpoint for both client and servers
+  -creates Locals
+  -creates Remotes (RemotesProducer, RemotesConsumer), calls produce
+  -run()
+    -gathers up all RemoteProducer's and pushes their run() on tokio tasks/futures list
+    -starts the forwarder if configured
+    -creates QUIC server and services
+      -accepts new QUIC connections
+      -spawns task to handle connection
+        -accepts MOQT session (setup handshake)
+        -creates Relay session with a Producer and a Consumer, and runs it
+-Session.rs
+  -run()
+    -moq_transport::Session.run()
+    -Producer.run()
+    -Consumer.run()
+-Producer.rs
+  -Has a transport Publisher, Locals, and optional RemotesConsumer
+  -run()
+    -wait for subscribes to arrive and serve them in a new task
+-Consumer.rs
+  -Has a transport Subscriber, Locals, and optional Producer
+  -run()
+    -wait for announces to arrive and server them in a new task
+-Local.rs
+  -Has a Hashmap of TrackNamespace to TracksReader
+
+
+
+TODO
+- add message encode/decode unit tests
+- replace internal Queue<T> with mpsc or similar
+- util and watch folders have classes with almost identical functionality, I suspect one was intended to replace the other
+  - looks like util is older, since it is not listed in lib.rs
+- cache
+- update messaging to latest draft
+- https://github.com/englishm/moq-rs/issues
+- implement fetch in relay
+
+
+moq-rs defines the following messages type it sends:
+
+Publisher
+---------
+MaxRequestId
+Announce
+Unannounce
+Publish
+SubscribeDone
+SubscribeOK/Error
+TrackStatusOk/Error
+FetchOk/Error
+SubscribeNamespaceOk/Error
+
+
+Subscriber
+----------
+Subscribe
+SubscribeUpdate
+Unsubscribe
+Fetch
+FetchCancel
+TrackStatus
+SubscribeNamespace
+UnsubscribeNamespace
+AnnouceCancel
+AnnounceOk/Error
+PublishOk/Error
+
+
+
+
