@@ -19,6 +19,7 @@ pub struct SubscribeInfo {
 
 struct SubscribeState {
     ok: bool,
+    track_alias: Option<u64>,
     closed: Result<(), ServeError>,
 }
 
@@ -26,6 +27,7 @@ impl Default for SubscribeState {
     fn default() -> Self {
         Self {
             ok: Default::default(),
+            track_alias: None,
             closed: Ok(()),
         }
     }
@@ -121,7 +123,7 @@ pub(super) struct SubscribeRecv {
 }
 
 impl SubscribeRecv {
-    pub fn ok(&mut self) -> Result<(), ServeError> {
+    pub fn ok(&mut self, alias: u64) -> Result<(), ServeError> {
         let state = self.state.lock();
         if state.ok {
             return Err(ServeError::Duplicate);
@@ -129,9 +131,15 @@ impl SubscribeRecv {
 
         if let Some(mut state) = state.into_mut() {
             state.ok = true;
+            state.track_alias = Some(alias);
         }
 
         Ok(())
+    }
+
+    pub fn track_alias(&self) -> Option<u64> {
+        let state = self.state.lock();
+        state.track_alias
     }
 
     pub fn error(mut self, err: ServeError) -> Result<(), ServeError> {
@@ -163,7 +171,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
-            subgroup_id: header.subgroup_id.unwrap(), // TODO SLG - subgroup_id may not be present
+            subgroup_id: header.subgroup_id.unwrap_or(0),
             priority: header.publisher_priority,
         })?;
 
@@ -176,7 +184,7 @@ impl SubscribeRecv {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
         let mut datagrams = match writer {
-            TrackWriterMode::Track(init) => init.datagrams()?, // TODO SLG - is this needed?
+            TrackWriterMode::Track(track) => track.datagrams()?, // TODO SLG - is this needed?
             TrackWriterMode::Datagrams(datagrams) => datagrams,
             _ => return Err(ServeError::Mode),
         };
@@ -184,9 +192,9 @@ impl SubscribeRecv {
         // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
-            object_id: datagram.object_id.unwrap(), // TODO SLG - make safe
+            object_id: datagram.object_id.unwrap_or(0),
             priority: datagram.publisher_priority,
-            payload: datagram.payload.unwrap(), // TODO SLG - datagram.payload is an Option
+            payload: datagram.payload.unwrap_or_default(),
         })?;
 
         Ok(())

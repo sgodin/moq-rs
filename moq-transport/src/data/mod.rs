@@ -1,11 +1,11 @@
 mod datagram;
 mod fetch;
 mod header;
-mod object;
+mod object_status;
 mod subgroup;
 
 pub use datagram::*;
 pub use fetch::*;
 pub use header::*;
-pub use object::*;
+pub use object_status::*;
 pub use subgroup::*;

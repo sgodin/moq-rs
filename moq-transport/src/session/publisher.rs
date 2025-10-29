@@ -180,7 +180,7 @@ impl Publisher {
             .ok_or(ServeError::NotFound)?;
         let response;
 
-        if let Some(latest) = track.latest() {
+        if let Some(latest) = track.largest() {
             response = message::TrackStatusOk {
                 id: track_status_request.request_msg.id,
                 track_alias: 0, // TODO SLG - wire up track alias logic
@@ -363,18 +363,39 @@ impl Publisher {
         Ok(())
     }
 
-    pub(super) fn send_message<T: Into<message::Publisher> + Into<Message>>(&mut self, msg: T) {
+    /// Process a message before sending it, performing any necessary internal actions.
+    fn act_on_message_to_send<T: Into<message::Publisher>>(
+        &mut self,
+        msg: T,
+    ) -> message::Publisher {
         let msg = msg.into();
         match &msg {
-            message::Publisher::PublishDone(msg) => self.drop_subscribe(msg.id),
-            message::Publisher::SubscribeError(msg) => self.drop_subscribe(msg.id),
-            message::Publisher::PublishNamespaceDone(msg) => {
-                self.drop_publish_namespace(&msg.track_namespace)
+            message::Publisher::PublishDone(m) => self.drop_subscribe(m.id),
+            message::Publisher::SubscribeError(m) => self.drop_subscribe(m.id),
+            message::Publisher::PublishNamespaceDone(m) => {
+                self.drop_publish_namespace(&m.track_namespace);
             }
-            _ => (),
-        };
+            _ => {}
+        }
+        msg
+    }
 
+    /// Send a message without waiting for it to be sent.
+    pub(super) fn send_message<T: Into<message::Publisher> + Into<Message>>(&mut self, msg: T) {
+        let msg = self.act_on_message_to_send(msg);
         self.outgoing.push(msg.into()).ok();
+    }
+
+    /// Send a message and wait until it is sent (or at least popped of the outgoing control message queue)
+    pub(super) async fn send_message_and_wait<T: Into<message::Publisher> + Into<Message>>(
+        &mut self,
+        msg: T,
+    ) {
+        let msg = self.act_on_message_to_send(msg);
+        self.outgoing
+            .push_and_wait_until_popped(msg.into())
+            .await
+            .ok();
     }
 
     fn drop_subscribe(&mut self, id: u64) {

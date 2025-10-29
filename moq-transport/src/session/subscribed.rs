@@ -102,24 +102,31 @@ impl Subscribed {
     }
 
     async fn serve_inner(&mut self, track: serve::TrackReader) -> Result<(), SessionError> {
-        let latest = track.latest();
+        // Update largest location before sending SubscribeOk
+        let largest_location = track.largest();
         self.state
             .lock_mut()
             .ok_or(ServeError::Cancel)?
-            .largest_location = latest;
+            .largest_location = largest_location;
 
-        self.publisher.send_message(message::SubscribeOk {
-            id: self.msg.id,
-            track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
-            expires: 0,               // TODO SLG
-            group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
-            content_exists: latest.is_some(),
-            largest_location: latest,
-            params: Default::default(),
-        });
+        // Send SubscribeOk using send_message_and_wait to ensure it is sent before
+        // we start serving the track.  If a subscriber get's the stream before SubscribeOk
+        // then they won't recognize the track_alias in the stream header.
+        self.publisher
+            .send_message_and_wait(message::SubscribeOk {
+                id: self.msg.id,
+                track_alias: self.msg.id, // use subscription id as track alias
+                expires: 0,               // TODO SLG
+                group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
+                content_exists: largest_location.is_some(),
+                largest_location,
+                params: Default::default(),
+            })
+            .await;
 
         self.ok = true; // So we send SubscribeDone on drop
 
+        // Serve based on track mode
         match track.mode().await? {
             // TODO cancel track/datagrams on closed
             TrackReaderMode::Stream(_stream) => panic!("deprecated"),
@@ -204,7 +211,7 @@ impl Subscribed {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
                             header_type: data::StreamHeaderType::SubgroupIdExt,  // SubGroupId = Yes, Extensions = Yes, ContainsEndOfGroup = No
-                            track_alias: self.msg.id, // TODO SLG - use subscription id for now, needs fixing
+                            track_alias: self.msg.id, // use subscription id as track_alias
                             group_id: subgroup.group_id,
                             subgroup_id: Some(subgroup.subgroup_id),
                             publisher_priority: subgroup.priority,
@@ -367,7 +374,7 @@ impl Subscribed {
         while let Some(datagram) = datagrams.read().await? {
             let encoded_datagram = data::Datagram {
                 datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
-                track_alias: self.msg.id, //  TODO SLG - use subscription id for now
+                track_alias: self.msg.id, // use subscription id as track_alias
                 group_id: datagram.group_id,
                 object_id: Some(datagram.object_id),
                 publisher_priority: datagram.priority,
@@ -403,7 +410,6 @@ impl Subscribed {
                     encoded_datagram.group_id,
                     encoded_datagram.object_id.unwrap(),
                 )?;
-            // TODO SLG - fix up safety of unwrap()
 
             datagram_count += 1;
         }
