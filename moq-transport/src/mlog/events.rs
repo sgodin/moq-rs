@@ -23,7 +23,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
-use crate::{data, message, setup};
+use crate::{coding, data, message, setup};
 
 /// MoQ Transport event following qlog patterns
 #[serde_with::skip_serializing_none]
@@ -141,197 +141,192 @@ pub struct LogLevelEvent {
     pub message: String,
 }
 
-// Helper functions to create events for specific message types
+// Helper functions to create vector of string pairs from KVPs
+fn key_value_pairs_to_vec(kvps: &coding::KeyValuePairs) -> Vec<(String, String)> {
+    kvps.0
+        .iter()
+        .map(|(k, v)| (k.to_string(), format!("{:?}", v.value)))
+        .collect()
+}
+
+fn create_control_message_event(
+    time: f64,
+    stream_id: u64,
+    is_parsed: bool,
+    msg_type: &str,
+    message: JsonValue,
+) -> Event {
+    if is_parsed {
+        Event {
+            time,
+            name: "moqt:control_message_parsed".to_string(),
+            data: EventData::ControlMessageParsed(ControlMessageParsed {
+                stream_id,
+                message_type: msg_type.to_string(),
+                message,
+            }),
+        }
+    } else {
+        Event {
+            time,
+            name: "moqt:control_message_created".to_string(),
+            data: EventData::ControlMessageCreated(ControlMessageCreated {
+                stream_id,
+                message_type: msg_type.to_string(),
+                message,
+            }),
+        }
+    }
+}
 
 /// Create a control_message_parsed event for CLIENT_SETUP
 pub fn client_setup_parsed(time: f64, stream_id: u64, msg: &setup::Client) -> Event {
     let versions: Vec<String> = msg.versions.0.iter().map(|v| format!("{:?}", v)).collect();
-
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "client_setup".to_string(),
-            message: json!({
-                "number_of_supported_versions": msg.versions.0.len(),
-                "supported_versions": versions,
-                "number_of_parameters": msg.params.0.len(),
-            }),
+        stream_id,
+        true,
+        "client_setup",
+        json!(
+        {
+            "number_of_supported_versions": msg.versions.0.len(),
+            "supported_versions": versions,
+            "parameters": key_value_pairs_to_vec(&msg.params),
         }),
-    }
+    )
 }
 
 /// Create a control_message_created event for SERVER_SETUP
 pub fn server_setup_created(time: f64, stream_id: u64, msg: &setup::Server) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "server_setup".to_string(),
-            message: json!({
-                "selected_version": format!("{:?}", msg.version),
-                "number_of_parameters": msg.params.0.len(),
-            }),
+        stream_id,
+        false,
+        "server_setup",
+        json!(
+        {
+            "selected_version": format!("{:?}", msg.version),
+            "parameters": key_value_pairs_to_vec(&msg.params),
         }),
-    }
+    )
 }
 
-/// Create a control_message_parsed event for SUBSCRIBE
-pub fn subscribe_parsed(time: f64, stream_id: u64, msg: &message::Subscribe) -> Event {
-    let mut message = json!({
+/// Helper to convert SUBSCRIBE message to JSON
+fn subscribe_to_json(msg: &message::Subscribe) -> JsonValue {
+    let mut json = json!({
         "subscribe_id": msg.id,
-        "track_alias": msg.id, // In SUBSCRIBE, the id field serves as the track_alias
         "track_namespace": msg.track_namespace.to_string(),
         "track_name": &msg.track_name,
         "subscriber_priority": msg.subscriber_priority,
         "group_order": format!("{:?}", msg.group_order),
         "filter_type": format!("{:?}", msg.filter_type),
-        "number_of_parameters": msg.params.0.len(),
+        "parameters": key_value_pairs_to_vec(&msg.params),
     });
 
     // Add optional fields based on filter type
     if let Some(start_loc) = &msg.start_location {
-        message["start_group"] = json!(start_loc.group_id);
-        message["start_object"] = json!(start_loc.object_id);
+        json["start_group"] = json!(start_loc.group_id);
+        json["start_object"] = json!(start_loc.object_id);
     }
     if let Some(end_group) = msg.end_group_id {
-        message["end_group"] = json!(end_group);
+        json["end_group"] = json!(end_group);
     }
 
-    Event {
-        time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "subscribe".to_string(),
-            message,
-        }),
-    }
+    json
+}
+
+/// Create a control_message_parsed event for SUBSCRIBE
+pub fn subscribe_parsed(time: f64, stream_id: u64, msg: &message::Subscribe) -> Event {
+    create_control_message_event(time, stream_id, true, "subscribe", subscribe_to_json(msg))
 }
 
 /// Create a control_message_created event for SUBSCRIBE
 pub fn subscribe_created(time: f64, stream_id: u64, msg: &message::Subscribe) -> Event {
-    let mut message = json!({
-        "subscribe_id": msg.id,
-        "track_alias": msg.id,
-        "track_namespace": msg.track_namespace.to_string(),
-        "track_name": &msg.track_name,
-        "subscriber_priority": msg.subscriber_priority,
-        "group_order": format!("{:?}", msg.group_order),
-        "filter_type": format!("{:?}", msg.filter_type),
-        "number_of_parameters": msg.params.0.len(),
-    });
-
-    if let Some(start_loc) = &msg.start_location {
-        message["start_group"] = json!(start_loc.group_id);
-        message["start_object"] = json!(start_loc.object_id);
-    }
-    if let Some(end_group) = msg.end_group_id {
-        message["end_group"] = json!(end_group);
-    }
-
-    Event {
-        time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "subscribe".to_string(),
-            message,
-        }),
-    }
+    create_control_message_event(time, stream_id, false, "subscribe", subscribe_to_json(msg))
 }
 
-/// Create a control_message_parsed event for SUBSCRIBE_OK
-pub fn subscribe_ok_parsed(time: f64, stream_id: u64, msg: &message::SubscribeOk) -> Event {
-    let mut message = json!({
+/// Helper to convert SUBSCRIBE_OK message to JSON
+fn subscribe_ok_to_json(msg: &message::SubscribeOk) -> JsonValue {
+    let mut json = json!({
         "subscribe_id": msg.id,
+        "track_alias": msg.track_alias,
         "expires": msg.expires,
         "group_order": format!("{:?}", msg.group_order),
         "content_exists": msg.content_exists,
-        "number_of_parameters": msg.params.0.len(),
+        "parameters": key_value_pairs_to_vec(&msg.params),
     });
 
     // Add optional largest_location fields if content exists
     if msg.content_exists {
         if let Some(largest) = &msg.largest_location {
-            message["largest_group_id"] = json!(largest.group_id);
-            message["largest_object_id"] = json!(largest.object_id);
+            json["largest_group_id"] = json!(largest.group_id);
+            json["largest_object_id"] = json!(largest.object_id);
         }
     }
 
-    Event {
+    json
+}
+
+/// Create a control_message_parsed event for SUBSCRIBE_OK
+pub fn subscribe_ok_parsed(time: f64, stream_id: u64, msg: &message::SubscribeOk) -> Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "subscribe_ok".to_string(),
-            message,
-        }),
-    }
+        stream_id,
+        true,
+        "subscribe_ok",
+        subscribe_ok_to_json(msg),
+    )
 }
 
 /// Create a control_message_created event for SUBSCRIBE_OK
 pub fn subscribe_ok_created(time: f64, stream_id: u64, msg: &message::SubscribeOk) -> Event {
-    let mut message = json!({
-        "subscribe_id": msg.id,
-        "expires": msg.expires,
-        "group_order": format!("{:?}", msg.group_order),
-        "content_exists": msg.content_exists,
-        "number_of_parameters": msg.params.0.len(),
-    });
-
-    if msg.content_exists {
-        if let Some(largest) = &msg.largest_location {
-            message["largest_group_id"] = json!(largest.group_id);
-            message["largest_object_id"] = json!(largest.object_id);
-        }
-    }
-
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "subscribe_ok".to_string(),
-            message,
-        }),
-    }
+        stream_id,
+        false,
+        "subscribe_ok",
+        subscribe_ok_to_json(msg),
+    )
+}
+
+/// Helper to convert SUBSCRIBE_ERROR message to JSON
+fn subscribe_error_to_json(msg: &message::SubscribeError) -> JsonValue {
+    json!({
+        "subscribe_id": msg.id,
+        "error_code": msg.error_code,
+        "reason_phrase": &msg.reason_phrase.0,
+    })
 }
 
 /// Create a control_message_parsed event for SUBSCRIBE_ERROR
 pub fn subscribe_error_parsed(time: f64, stream_id: u64, msg: &message::SubscribeError) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "subscribe_error".to_string(),
-            message: json!({
-                "subscribe_id": msg.id,
-                "error_code": msg.error_code,
-                "reason_phrase": &msg.reason_phrase.0,
-            }),
-        }),
-    }
+        stream_id,
+        true,
+        "subscribe_error",
+        subscribe_error_to_json(msg),
+    )
 }
 
 /// Create a control_message_created event for SUBSCRIBE_ERROR
 pub fn subscribe_error_created(time: f64, stream_id: u64, msg: &message::SubscribeError) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "subscribe_error".to_string(),
-            message: json!({
-                "subscribe_id": msg.id,
-                "error_code": msg.error_code,
-                "reason_phrase": &msg.reason_phrase.0,
-            }),
-        }),
-    }
+        stream_id,
+        false,
+        "subscribe_error",
+        subscribe_error_to_json(msg),
+    )
+}
+
+/// Helper to convert PUBLISH_NAMESPACE message to JSON
+fn publish_namespace_to_json(msg: &message::PublishNamespace) -> JsonValue {
+    json!({
+        "request_id": msg.id,
+        "track_namespace": msg.track_namespace.to_string(),
+        "parameters": key_value_pairs_to_vec(&msg.params),
+    })
 }
 
 /// Create a control_message_parsed event for PUBLISH_NAMESPACE (was ANNOUNCE in earlier drafts)
@@ -340,19 +335,13 @@ pub fn publish_namespace_parsed(
     stream_id: u64,
     msg: &message::PublishNamespace,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "publish_namespace".to_string(),
-            message: json!({
-                "request_id": msg.id,
-                "track_namespace": msg.track_namespace.to_string(),
-                "number_of_parameters": msg.params.0.len(),
-            }),
-        }),
-    }
+        stream_id,
+        true,
+        "publish_namespace",
+        publish_namespace_to_json(msg),
+    )
 }
 
 /// Create a control_message_created event for PUBLISH_NAMESPACE
@@ -361,19 +350,20 @@ pub fn publish_namespace_created(
     stream_id: u64,
     msg: &message::PublishNamespace,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "publish_namespace".to_string(),
-            message: json!({
-                "request_id": msg.id,
-                "track_namespace": msg.track_namespace.to_string(),
-                "number_of_parameters": msg.params.0.len(),
-            }),
-        }),
-    }
+        stream_id,
+        false,
+        "publish_namespace",
+        publish_namespace_to_json(msg),
+    )
+}
+
+/// Helper to convert PUBLISH_NAMESPACE_OK message to JSON
+fn publish_namespace_ok_to_json(msg: &message::PublishNamespaceOk) -> JsonValue {
+    json!({
+        "request_id": msg.id,
+    })
 }
 
 /// Create a control_message_parsed event for PUBLISH_NAMESPACE_OK (was ANNOUNCE_OK)
@@ -382,17 +372,13 @@ pub fn publish_namespace_ok_parsed(
     stream_id: u64,
     msg: &message::PublishNamespaceOk,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "publish_namespace_ok".to_string(),
-            message: json!({
-                "request_id": msg.id,
-            }),
-        }),
-    }
+        stream_id,
+        true,
+        "publish_namespace_ok",
+        publish_namespace_ok_to_json(msg),
+    )
 }
 
 /// Create a control_message_created event for PUBLISH_NAMESPACE_OK
@@ -401,17 +387,22 @@ pub fn publish_namespace_ok_created(
     stream_id: u64,
     msg: &message::PublishNamespaceOk,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "publish_namespace_ok".to_string(),
-            message: json!({
-                "request_id": msg.id,
-            }),
-        }),
-    }
+        stream_id,
+        false,
+        "publish_namespace_ok",
+        publish_namespace_ok_to_json(msg),
+    )
+}
+
+/// Helper to convert PUBLISH_NAMESPACE_ERROR message to JSON
+fn publish_namespace_error_to_json(msg: &message::PublishNamespaceError) -> JsonValue {
+    json!({
+        "request_id": msg.id,
+        "error_code": msg.error_code,
+        "reason_phrase": &msg.reason_phrase.0,
+    })
 }
 
 /// Create a control_message_parsed event for PUBLISH_NAMESPACE_ERROR (was ANNOUNCE_ERROR)
@@ -420,19 +411,13 @@ pub fn publish_namespace_error_parsed(
     stream_id: u64,
     msg: &message::PublishNamespaceError,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "publish_namespace_error".to_string(),
-            message: json!({
-                "request_id": msg.id,
-                "error_code": msg.error_code,
-                "reason_phrase": &msg.reason_phrase.0,
-            }),
-        }),
-    }
+        stream_id,
+        true,
+        "publish_namespace_error",
+        publish_namespace_error_to_json(msg),
+    )
 }
 
 /// Create a control_message_created event for PUBLISH_NAMESPACE_ERROR
@@ -441,86 +426,72 @@ pub fn publish_namespace_error_created(
     stream_id: u64,
     msg: &message::PublishNamespaceError,
 ) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "publish_namespace_error".to_string(),
-            message: json!({
-                "request_id": msg.id,
-                "error_code": msg.error_code,
-                "reason_phrase": &msg.reason_phrase.0,
-            }),
-        }),
-    }
+        stream_id,
+        false,
+        "publish_namespace_error",
+        publish_namespace_error_to_json(msg),
+    )
 }
 
 /// Create a control_message_parsed event for UNSUBSCRIBE
 pub fn unsubscribe_parsed(time: f64, stream_id: u64, msg: &message::Unsubscribe) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "unsubscribe".to_string(),
-            message: json!({
-                "subscribe_id": msg.id,
-            }),
+        stream_id,
+        true,
+        "unsubscribe",
+        json!({
+            "subscribe_id": msg.id,
         }),
-    }
+    )
 }
 
 /// Create a control_message_created event for UNSUBSCRIBE
 pub fn unsubscribe_created(time: f64, stream_id: u64, msg: &message::Unsubscribe) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "unsubscribe".to_string(),
-            message: json!({
-                "subscribe_id": msg.id,
-            }),
+        stream_id,
+        false,
+        "unsubscribe",
+        json!({
+            "subscribe_id": msg.id,
         }),
-    }
+    )
 }
 
 /// Create a control_message_parsed event for GOAWAY
 pub fn go_away_parsed(time: f64, stream_id: u64, msg: &message::GoAway) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_parsed".to_string(),
-        data: EventData::ControlMessageParsed(ControlMessageParsed {
-            stream_id,
-            message_type: "goaway".to_string(),
-            message: json!({
-                "new_session_uri": &msg.uri.0,
-            }),
+        stream_id,
+        true,
+        "goaway",
+        json!({
+                    "new_session_uri": &msg.uri.0,
         }),
-    }
+    )
 }
 
 /// Create a control_message_created event for GOAWAY
 pub fn go_away_created(time: f64, stream_id: u64, msg: &message::GoAway) -> Event {
-    Event {
+    create_control_message_event(
         time,
-        name: "moqt:control_message_created".to_string(),
-        data: EventData::ControlMessageCreated(ControlMessageCreated {
-            stream_id,
-            message_type: "goaway".to_string(),
-            message: json!({
-                "new_session_uri": &msg.uri.0,
-            }),
+        stream_id,
+        false,
+        "goaway",
+        json!({
+                    "new_session_uri": &msg.uri.0,
         }),
-    }
+    )
 }
 
 // Data plane events
 
-/// Create a subgroup_header_parsed event
-pub fn subgroup_header_parsed(time: f64, stream_id: u64, header: &data::SubgroupHeader) -> Event {
-    let mut header_data = json!({
+/// Helper to convert SubgroupHeader to JSON
+fn subgroup_header_to_json(header: &data::SubgroupHeader) -> JsonValue {
+    let mut json = json!({
         "track_alias": header.track_alias,
         "group_id": header.group_id,
         "publisher_priority": header.publisher_priority,
@@ -528,51 +499,43 @@ pub fn subgroup_header_parsed(time: f64, stream_id: u64, header: &data::Subgroup
     });
 
     if let Some(subgroup_id) = header.subgroup_id {
-        header_data["subgroup_id"] = json!(subgroup_id);
+        json["subgroup_id"] = json!(subgroup_id);
     }
 
+    json
+}
+
+/// Create a subgroup_header_parsed event
+pub fn subgroup_header_parsed(time: f64, stream_id: u64, header: &data::SubgroupHeader) -> Event {
     Event {
         time,
         name: "moqt:subgroup_header_parsed".to_string(),
         data: EventData::SubgroupHeaderParsed(SubgroupHeaderParsed {
             stream_id,
-            header: header_data,
+            header: subgroup_header_to_json(header),
         }),
     }
 }
 
 /// Create a subgroup_header_created event
 pub fn subgroup_header_created(time: f64, stream_id: u64, header: &data::SubgroupHeader) -> Event {
-    let mut header_data = json!({
-        "track_alias": header.track_alias,
-        "group_id": header.group_id,
-        "publisher_priority": header.publisher_priority,
-        "header_type": format!("{:?}", header.header_type),
-    });
-
-    if let Some(subgroup_id) = header.subgroup_id {
-        header_data["subgroup_id"] = json!(subgroup_id);
-    }
-
     Event {
         time,
         name: "moqt:subgroup_header_created".to_string(),
         data: EventData::SubgroupHeaderCreated(SubgroupHeaderCreated {
             stream_id,
-            header: header_data,
+            header: subgroup_header_to_json(header),
         }),
     }
 }
 
-/// Create a subgroup_object_parsed event
-pub fn subgroup_object_parsed(
-    time: f64,
-    stream_id: u64,
+/// Helper to convert SubgroupObject to JSON
+fn subgroup_object_to_json(
     group_id: u64,
     subgroup_id: u64,
     object_id: u64,
     object: &data::SubgroupObject,
-) -> Event {
+) -> JsonValue {
     let mut object_data = json!({
         "group_id": group_id,
         "subgroup_id": subgroup_id,
@@ -585,12 +548,24 @@ pub fn subgroup_object_parsed(
         object_data["object_status"] = json!(format!("{:?}", status));
     }
 
+    object_data
+}
+
+/// Create a subgroup_object_parsed event
+pub fn subgroup_object_parsed(
+    time: f64,
+    stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
+    object: &data::SubgroupObject,
+) -> Event {
     Event {
         time,
         name: "moqt:subgroup_object_parsed".to_string(),
         data: EventData::SubgroupObjectParsed(SubgroupObjectParsed {
             stream_id,
-            object: object_data,
+            object: subgroup_object_to_json(group_id, subgroup_id, object_id, object),
         }),
     }
 }
@@ -604,37 +579,24 @@ pub fn subgroup_object_created(
     object_id: u64,
     object: &data::SubgroupObject,
 ) -> Event {
-    let mut object_data = json!({
-        "group_id": group_id,
-        "subgroup_id": subgroup_id,
-        "object_id": object_id,
-        "extension_headers_length": 0,
-        "object_payload_length": object.payload_length,
-    });
-
-    if let Some(status) = object.status {
-        object_data["object_status"] = json!(format!("{:?}", status));
-    }
-
     Event {
         time,
         name: "moqt:subgroup_object_created".to_string(),
         data: EventData::SubgroupObjectCreated(SubgroupObjectCreated {
             stream_id,
-            object: object_data,
+            object: subgroup_object_to_json(group_id, subgroup_id, object_id, object),
         }),
     }
 }
 
-/// Create a subgroup_object_parsed event (with extensions)
-pub fn subgroup_object_ext_parsed(
-    time: f64,
-    stream_id: u64,
+/// Helper to convert SubgroupObject to JSON
+fn subgroup_object_ext_to_json(
     group_id: u64,
     subgroup_id: u64,
     object_id: u64,
     object: &data::SubgroupObjectExt,
-) -> Event {
+) -> JsonValue {
+    // TODO encode extension headers
     let mut object_data = json!({
         "group_id": group_id,
         "subgroup_id": subgroup_id,
@@ -647,12 +609,24 @@ pub fn subgroup_object_ext_parsed(
         object_data["object_status"] = json!(format!("{:?}", status));
     }
 
+    object_data
+}
+
+/// Create a subgroup_object_parsed event (with extensions)
+pub fn subgroup_object_ext_parsed(
+    time: f64,
+    stream_id: u64,
+    group_id: u64,
+    subgroup_id: u64,
+    object_id: u64,
+    object: &data::SubgroupObjectExt,
+) -> Event {
     Event {
         time,
         name: "moqt:subgroup_object_parsed".to_string(),
         data: EventData::SubgroupObjectParsed(SubgroupObjectParsed {
             stream_id,
-            object: object_data,
+            object: subgroup_object_ext_to_json(group_id, subgroup_id, object_id, object),
         }),
     }
 }
@@ -666,24 +640,12 @@ pub fn subgroup_object_ext_created(
     object_id: u64,
     object: &data::SubgroupObjectExt,
 ) -> Event {
-    let mut object_data = json!({
-        "group_id": group_id,
-        "subgroup_id": subgroup_id,
-        "object_id": object_id,
-        "extension_headers_length": object.extension_headers.0.len(),
-        "object_payload_length": object.payload_length,
-    });
-
-    if let Some(status) = object.status {
-        object_data["object_status"] = json!(format!("{:?}", status));
-    }
-
     Event {
         time,
         name: "moqt:subgroup_object_created".to_string(),
         data: EventData::SubgroupObjectCreated(SubgroupObjectCreated {
             stream_id,
-            object: object_data,
+            object: subgroup_object_ext_to_json(group_id, subgroup_id, object_id, object),
         }),
     }
 }
