@@ -47,10 +47,10 @@ How to Get Fly logs:
 https://fly-moq-relay.englishm.net/mlog/24db327a77bf60a44262c9fb5ae0ed6e
 
 Main TODO's to get code back to previous functionality level:
-- track status handling needs adjustment for new messaging changes
-- update SessionError list for draft-13
-- subscribe handling needs adjustment for new messaging, especially around track_alias handling - IN PROGRESS
-- mapping datagrams to subscriptions needs to be fixed up - DONE
+- track status handling needs adjustment for new messaging changes (Publisher.rs)
+- Subscriber.rs PublishNamespaceError needs handling to drop announce via request_id instead of namespace 
+- Subscriber.rs - object forwarding: object_id_delta, extension headers and object status are being ignored and not passed on
+- update SessionError list for draft-14
 
 
 Other notable TODO's
@@ -61,6 +61,9 @@ Other notable TODO's
 - add Enum for SubscribeDone StatusCodes
 - look for payload size limit in draft and apply
 - Implement Fetch streams and fetching
+- Remove SessionError::RoleViolation
+- Make MaxRequestId configurable in Session
+
 
 
 moq-clock-ietf
