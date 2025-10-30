@@ -171,6 +171,7 @@ impl SubscribeRecv {
 
         let writer = subgroups.create(serve::Subgroup {
             group_id: header.group_id,
+            // When subgroup_id is not present in the header type, it implicitly means subgroup 0
             subgroup_id: header.subgroup_id.unwrap_or(0),
             priority: header.publisher_priority,
         })?;
@@ -192,8 +193,11 @@ impl SubscribeRecv {
         // TODO SLG - update with new datagram fields
         datagrams.write(serve::Datagram {
             group_id: datagram.group_id,
+            // When object_id is not present in the datagram type, it implicitly means object 0
             object_id: datagram.object_id.unwrap_or(0),
             priority: datagram.publisher_priority,
+            // TODO: Handle status datagrams separately - they don't have payload
+            // For now, use empty bytes as fallback (shouldn't happen in practice for payload datagrams)
             payload: datagram.payload.unwrap_or_default(),
         })?;
 
