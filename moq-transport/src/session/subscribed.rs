@@ -109,7 +109,7 @@ impl Subscribed {
             .ok_or(ServeError::Cancel)?
             .largest_location = largest_location;
 
-        // Send SubscribeOk using send_message_and_wait to ensure it is sent before
+        // Send SubscribeOk using send_message_and_wait to ensure it is sent at least to the QUIC stack before
         // we start serving the track.  If a subscriber get's the stream before SubscribeOk
         // then they won't recognize the track_alias in the stream header.
         self.publisher
