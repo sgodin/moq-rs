@@ -165,7 +165,10 @@ impl fmt::Debug for KeyValuePairs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ ")?;
         let pairs: Vec<_> = self.0.iter().collect();
-        for (_key, kv) in pairs {
+        for (i, (_key, kv)) in pairs.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
             write!(f, "{:?}", kv)?;
         }
         write!(f, " }}")
