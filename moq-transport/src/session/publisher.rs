@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 
 use crate::{
     coding::TrackNamespace,
-    message::{self, GroupOrder, Message},
+    message::{self, Message},
     mlog,
     serve::{ServeError, TracksReader},
 };
@@ -30,9 +30,13 @@ pub struct Publisher {
     /// added to this HashMap to track the inbound subscription
     subscribeds: Arc<Mutex<HashMap<u64, SubscribedRecv>>>,
 
-    /// When a Subscribe is received and we DO NOT have a previous annouce for the namespace, then a new entry is
+    /// When a Subscribe is received and we DO NOT have a previous announce for the namespace, then a new entry is
     /// added to this Queue to track the inbound subscription
-    unknown: Queue<Subscribed>,
+    unknown_subscribed: Queue<Subscribed>,
+
+    /// When a TrackStatus is received and we DO NOT have a previous announce for the namespace, then a new entry is
+    /// added to this Queue to track the inbound track status request
+    unknown_track_status_requested: Queue<TrackStatusRequested>,
 
     /// The queue we will write any outbound control messages we want to sent, the session run_send task
     /// will process the queue and send the message on the control stream.
@@ -60,7 +64,8 @@ impl Publisher {
             webtransport,
             announces: Default::default(),
             subscribeds: Default::default(),
-            unknown: Default::default(),
+            unknown_subscribed: Default::default(),
+            unknown_track_status_requested: Default::default(),
             outgoing,
             next_requestid,
             mlog,
@@ -162,7 +167,7 @@ impl Publisher {
         subscribed: Subscribed,
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
-        if let Some(track) = tracks.subscribe(&subscribed.name) {
+        if let Some(track) = tracks.subscribe(&subscribed.track_name) {
             subscribed.serve(track).await?;
         } else {
             subscribed.close(ServeError::NotFound)?;
@@ -172,46 +177,26 @@ impl Publisher {
     }
 
     pub async fn serve_track_status(
-        mut track_status_request: TrackStatusRequested,
+        track_status_request: TrackStatusRequested,
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
         let track = tracks
             .subscribe(&track_status_request.request_msg.track_name.clone())
             .ok_or(ServeError::NotFound)?;
-        let response;
 
-        if let Some(latest) = track.largest() {
-            response = message::TrackStatusOk {
-                id: track_status_request.request_msg.id,
-                track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 0,     // TODO SLG
-                group_order: GroupOrder::Ascending, // TODO SLG
-                content_exists: true,
-                largest_location: Some(latest),
-                params: Default::default(),
-            };
-        } else {
-            response = message::TrackStatusOk {
-                id: track_status_request.request_msg.id,
-                track_alias: 0, // TODO SLG - wire up track alias logic
-                expires: 0,     // TODO SLG
-                group_order: GroupOrder::Ascending, // TODO SLG
-                content_exists: false,
-                largest_location: None,
-                params: Default::default(),
-            };
-        }
-
-        // TODO: can we know of any other statuses in this context?
-
-        track_status_request.respond(response).await?;
+        track_status_request.respond_ok(&track)?;
 
         Ok(())
     }
 
     // Returns subscriptions that do not map to an active announce.
     pub async fn subscribed(&mut self) -> Option<Subscribed> {
-        self.unknown.pop().await
+        self.unknown_subscribed.pop().await
+    }
+
+    // Returns track_status requests that do not map to an active announce.
+    pub async fn track_status_requested(&mut self) -> Option<TrackStatusRequested> {
+        self.unknown_track_status_requested.pop().await
     }
 
     pub(crate) fn recv_message(&mut self, msg: message::Subscriber) -> Result<(), SessionError> {
@@ -323,8 +308,9 @@ impl Publisher {
         }
 
         // Otherwise, put it in the unknown queue.
-        // TODO Have some way to detect if the application is not reading from the unknown queue.
-        if let Err(err) = self.unknown.push(subscribed) {
+        // TODO Have some way to detect if the application is not reading from the unknown queue,
+        // then send SubscribeError.
+        if let Err(err) = self.unknown_subscribed.push(subscribed) {
             // Default to closing with a not found error I guess.
             err.close(ServeError::NotFound)?;
         }
@@ -343,16 +329,28 @@ impl Publisher {
     fn recv_track_status(&mut self, msg: message::TrackStatus) -> Result<(), SessionError> {
         let namespace = msg.track_namespace.clone();
 
-        let mut announces = self.announces.lock().unwrap();
-        let announce = announces
-            .get_mut(&namespace)
-            .ok_or(SessionError::Internal)?;
-
+        // Create TrackSTatusRequested to track this request
         let track_status_requested = TrackStatusRequested::new(self.clone(), msg);
 
-        announce
-            .recv_track_status_requested(track_status_requested)
-            .map_err(Into::into)
+        // If we have an announce, route the track_status to it.
+        if let Some(announce) = self.announces.lock().unwrap().get_mut(&namespace) {
+            return announce
+                .recv_track_status_requested(track_status_requested)
+                .map_err(Into::into);
+        }
+
+        // Otherwise, put it in the unknown_track_status queue.
+        // TODO Have some way to detect if the application is not reading from the unknown_track_status queue,
+        // then send TrackStatusError.
+        if let Err(mut err) = self
+            .unknown_track_status_requested
+            .push(track_status_requested)
+        {
+            // Default to sending TrackStatusError with NotFound
+            err.respond_error(0, "Internal error")?;
+        }
+
+        Ok(())
     }
 
     fn recv_unsubscribe(&mut self, msg: message::Unsubscribe) -> Result<(), SessionError> {

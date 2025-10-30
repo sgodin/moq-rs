@@ -7,7 +7,7 @@ use std::{
 use crate::{
     coding::{Decode, TrackNamespace},
     data,
-    message::{self, Message},
+    message::{self, FilterType, GroupOrder, Message},
     mlog,
     serve::{self, ServeError},
 };
@@ -80,11 +80,30 @@ impl Subscriber {
         self.announced_queue.pop().await
     }
 
+    /// Get the current next request id to use and increment the value for by 2 for the next request
+    fn get_next_request_id(&self) -> u64 {
+        self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed)
+    }
+
+    pub fn track_status(&mut self, track_namespace: &TrackNamespace, track_name: &str) {
+        self.send_message(message::TrackStatus {
+            id: self.get_next_request_id(),
+            track_namespace: track_namespace.clone(),
+            track_name: track_name.to_string(),
+            subscriber_priority: 127, // default to mid value, see: https://github.com/moq-wg/moq-transport/issues/504
+            group_order: GroupOrder::Publisher, // defer to publisher send order
+            forward: true,            // default to forwarding objects
+            filter_type: FilterType::LargestObject,
+            start_location: None,
+            end_group_id: None,
+            params: Default::default(),
+        });
+        // TODO make async and wait for response?
+    }
+
     /// Subscribe to a track by creating a new subscribe request to the publisher.  Block until subscription is closed.
     pub async fn subscribe(&mut self, track: serve::TrackWriter) -> Result<(), ServeError> {
-        // Get the current next request id to use and increment the value for by 2 for the next request
-        let request_id = self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed);
-
+        let request_id = self.get_next_request_id();
         let (send, recv) = Subscribe::new(self.clone(), request_id, track);
         self.subscribes.lock().unwrap().insert(request_id, recv);
 
@@ -109,21 +128,27 @@ impl Subscriber {
         let _ = self.outgoing.push(msg.into());
     }
 
+    fn not_implemented_yet(&self) -> Result<(), SessionError> {
+        Err(SessionError::Serve(ServeError::Internal(
+            "Not implemented yet".to_string(),
+        )))
+    }
+
     /// Receive a message from the publisher via the control stream.
     pub(super) fn recv_message(&mut self, msg: message::Publisher) -> Result<(), SessionError> {
         let res = match &msg {
             message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
             message::Publisher::PublishNamespaceDone(msg) => self.recv_publish_namespace_done(msg),
-            message::Publisher::Publish(_msg) => todo!(), // TODO
+            message::Publisher::Publish(_msg) => self.not_implemented_yet(), // TODO
             message::Publisher::PublishDone(msg) => self.recv_publish_done(msg),
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
-            message::Publisher::TrackStatusError(_msg) => todo!(), // TODO
-            message::Publisher::FetchOk(_msg) => todo!(),          // TODO
-            message::Publisher::FetchError(_msg) => todo!(),       // TODO
-            message::Publisher::SubscribeNamespaceOk(_msg) => todo!(),
-            message::Publisher::SubscribeNamespaceError(_msg) => todo!(),
+            message::Publisher::TrackStatusError(_msg) => self.not_implemented_yet(), // TODO
+            message::Publisher::FetchOk(_msg) => self.not_implemented_yet(),          // TODO
+            message::Publisher::FetchError(_msg) => self.not_implemented_yet(),       // TODO
+            message::Publisher::SubscribeNamespaceOk(_msg) => self.not_implemented_yet(), // TODO
+            message::Publisher::SubscribeNamespaceError(_msg) => self.not_implemented_yet(), // TODO
         };
 
         if let Err(SessionError::Serve(err)) = res {

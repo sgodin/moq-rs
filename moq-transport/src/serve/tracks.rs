@@ -143,6 +143,16 @@ impl TracksReader {
         Self { state, queue, info }
     }
 
+    /// Get a track from the broadcast by name, if it exists.
+    pub fn get_track_reader(&mut self, track_name: &str) -> Option<TrackReader> {
+        let state = self.state.lock();
+
+        if let Some(track_reader) = state.tracks.get(track_name) {
+            return Some(track_reader.clone());
+        }
+        None
+    }
+
     /// Get or request a track from the broadcast by name.
     /// None is returned if [TracksWriter] or [TracksRequest] cannot fufill the request.
     pub fn subscribe(&mut self, track_name: &str) -> Option<TrackReader> {
