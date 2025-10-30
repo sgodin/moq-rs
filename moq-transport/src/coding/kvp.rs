@@ -1,13 +1,31 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
 use std::collections::HashMap;
+use std::fmt;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Value {
     IntValue(u64),
     BytesValue(Vec<u8>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::IntValue(v) => write!(f, "{}", v),
+            Value::BytesValue(bytes) => {
+                // Show up to 16 bytes in hex for readability
+                let preview: Vec<String> = bytes
+                    .iter()
+                    .take(16)
+                    .map(|b| format!("{:02X}", b))
+                    .collect();
+                write!(f, "[{}]", preview.join(" "))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct KeyValuePair {
     pub key: u64,
     pub value: Value,
@@ -83,7 +101,13 @@ impl Encode for KeyValuePair {
     }
 }
 
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
+impl fmt::Debug for KeyValuePair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{{}: {:?}}}", self.key, self.value)
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
 pub struct KeyValuePairs(pub HashMap<u64, KeyValuePair>);
 
 impl KeyValuePairs {
@@ -138,6 +162,20 @@ impl Encode for KeyValuePairs {
         }
 
         Ok(())
+    }
+}
+
+impl fmt::Debug for KeyValuePairs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ ")?;
+        let pairs: Vec<_> = self.0.iter().collect();
+        for (i, (_key, kv)) in pairs.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{:?}", kv)?;
+        }
+        write!(f, " }}")
     }
 }
 
