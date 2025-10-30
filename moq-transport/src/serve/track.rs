@@ -173,7 +173,7 @@ impl TrackReader {
     }
 
     // Returns the largest group/sequence
-    pub fn latest(&self) -> Option<Location> {
+    pub fn largest(&self) -> Option<Location> {
         // We don't even know the mode yet.
         // TODO populate from SUBSCRIBE_OK
         None

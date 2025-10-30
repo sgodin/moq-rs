@@ -19,12 +19,19 @@ use super::{Announced, AnnouncedRecv, Reader, Session, SessionError, Subscribe, 
 // TODO remove Clone.
 #[derive(Clone)]
 pub struct Subscriber {
+    /// The currently active inbound announces, keyed by namespace.
     announced: Arc<Mutex<HashMap<TrackNamespace, AnnouncedRecv>>>,
+
+    /// Queue of announced namespaces we have received from the Publisher, waiting to be processed.
     announced_queue: Queue<Announced>,
 
+    /// The currently active outbound subscribes, keyed by request id.
     subscribes: Arc<Mutex<HashMap<u64, SubscribeRecv>>>,
 
-    /// The queue we will write any outbound control messages we want to sent, the session run_send task
+    /// Map of track alias to subscription id for quick lookup when receiving streams/datagrams.
+    subscribe_alias_map: Arc<Mutex<HashMap<u64, u64>>>,
+
+    /// The queue we will write any outbound control messages we want to send, the session run_send task
     /// will process the queue and send the message on the control stream.
     outgoing: Queue<Message>,
 
@@ -49,26 +56,31 @@ impl Subscriber {
             announced: Default::default(),
             announced_queue: Default::default(),
             subscribes: Default::default(),
+            subscribe_alias_map: Default::default(),
             outgoing,
             next_requestid,
             mlog,
         }
     }
 
+    /// Create an inbound/server QUIC connection, by accepting a bi-directional QUIC stream for control messages.
     pub async fn accept(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
         let (session, _, subscriber) = Session::accept(session, None).await?;
         Ok((session, subscriber.unwrap()))
     }
 
+    /// Create an outbound/client QUIC connection, by opening a bi-directional QUIC stream for control messages.
     pub async fn connect(session: web_transport::Session) -> Result<(Session, Self), SessionError> {
         let (session, _, subscriber) = Session::connect(session, None).await?;
         Ok((session, subscriber))
     }
 
+    /// Wait for the next announced namespace from the publisher, if any.
     pub async fn announced(&mut self) -> Option<Announced> {
         self.announced_queue.pop().await
     }
 
+    /// Subscribe to a track by creating a new subscribe request to the publisher.  Block until subscription is closed.
     pub async fn subscribe(&mut self, track: serve::TrackWriter) -> Result<(), ServeError> {
         // Get the current next request id to use and increment the value for by 2 for the next request
         let request_id = self.next_requestid.fetch_add(2, atomic::Ordering::Relaxed);
@@ -79,6 +91,7 @@ impl Subscriber {
         send.closed().await
     }
 
+    /// Send a message to the publisher via the control stream.
     pub(super) fn send_message<M: Into<message::Subscriber>>(&mut self, msg: M) {
         let msg = msg.into();
 
@@ -96,6 +109,7 @@ impl Subscriber {
         let _ = self.outgoing.push(msg.into());
     }
 
+    /// Receive a message from the publisher via the control stream.
     pub(super) fn recv_message(&mut self, msg: message::Publisher) -> Result<(), SessionError> {
         let res = match &msg {
             message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
@@ -120,28 +134,31 @@ impl Subscriber {
         res
     }
 
+    /// Handle the reception of a PublishNamespace message from the publisher.
     fn recv_publish_namespace(
         &mut self,
         msg: &message::PublishNamespace,
     ) -> Result<(), SessionError> {
         let mut announces = self.announced.lock().unwrap();
 
+        // Check for duplicate namespace announcement
         let entry = match announces.entry(msg.track_namespace.clone()) {
             hash_map::Entry::Occupied(_) => return Err(SessionError::Duplicate),
             hash_map::Entry::Vacant(entry) => entry,
         };
 
+        // Create the announced namespace and insert it into our map of active announces, and the announced queue.
         let (announced, recv) = Announced::new(self.clone(), msg.id, msg.track_namespace.clone());
         if let Err(announced) = self.announced_queue.push(announced) {
             announced.close(ServeError::Cancel)?;
             return Ok(());
         }
-
         entry.insert(recv);
 
         Ok(())
     }
 
+    /// Handle the reception of a PublishNamespaceDone message from the publisher.
     fn recv_publish_namespace_done(
         &mut self,
         msg: &message::PublishNamespaceDone,
@@ -153,30 +170,57 @@ impl Subscriber {
         Ok(())
     }
 
+    /// Handle the reception of a SubscribeOk message from the publisher.
     fn recv_subscribe_ok(&mut self, msg: &message::SubscribeOk) -> Result<(), SessionError> {
         if let Some(subscribe) = self.subscribes.lock().unwrap().get_mut(&msg.id) {
-            subscribe.ok()?;
+            // Map track alias to subscription id for quick lookup when receiving streams/datagrams
+            self.subscribe_alias_map
+                .lock()
+                .unwrap()
+                .insert(msg.track_alias, msg.id);
+
+            // Notify the subscribe of the successful subscription
+            subscribe.ok(msg.track_alias)?;
         }
 
         Ok(())
     }
 
+    /// Remove a subscribe from our map of active subscribes, and the alias map if present.
+    fn remove_subscribe(&mut self, id: u64) -> Option<SubscribeRecv> {
+        if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&id) {
+            // Remove from alias map if present
+            if let Some(track_alias) = subscribe.track_alias() {
+                self.subscribe_alias_map
+                    .lock()
+                    .unwrap()
+                    .remove(&track_alias);
+            };
+            Some(subscribe)
+        } else {
+            None
+        }
+    }
+
+    /// Handle the reception of a SubscribeError message from the publisher.
     fn recv_subscribe_error(&mut self, msg: &message::SubscribeError) -> Result<(), SessionError> {
-        if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
+        if let Some(subscribe) = self.remove_subscribe(msg.id) {
             subscribe.error(ServeError::Closed(msg.error_code))?;
         }
 
         Ok(())
     }
 
+    /// Handle the reception of a PublishDone message from the publisher.
     fn recv_publish_done(&mut self, msg: &message::PublishDone) -> Result<(), SessionError> {
-        if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&msg.id) {
+        if let Some(subscribe) = self.remove_subscribe(msg.id) {
             subscribe.error(ServeError::Closed(msg.status_code))?;
         }
 
         Ok(())
     }
 
+    /// Handle the reception of a TrackStatusOk message from the publisher.
     fn recv_track_status_ok(&mut self, _msg: &message::TrackStatusOk) -> Result<(), SessionError> {
         // TODO: Expose this somehow?
         // TODO: Also add a way to send a Track Status Request in the first place
@@ -184,10 +228,21 @@ impl Subscriber {
         Ok(())
     }
 
+    /// Remove an announced namespace from our map of active announces.
     fn drop_publish_namespace(&mut self, namespace: &TrackNamespace) {
         self.announced.lock().unwrap().remove(namespace);
     }
 
+    /// Get a subscribe id by track alias.
+    fn get_subscribe_id_by_alias(&mut self, track_alias: u64) -> Option<u64> {
+        self.subscribe_alias_map
+            .lock()
+            .unwrap()
+            .get(&track_alias)
+            .cloned()
+    }
+
+    /// Handle reception of a new stream from the QUIC session.
     pub(super) async fn recv_stream(
         mut self,
         stream: web_transport::RecvStream,
@@ -215,42 +270,43 @@ impl Subscriber {
         }
 
         // No fetch support yet, so panic if fetch_header for now (via unwrap below)
-        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
-        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
+        let track_alias = stream_header.subgroup_header.as_ref().unwrap().track_alias;
         log::trace!(
-            "[SUBSCRIBER] recv_stream: stream for subscription id={}",
-            id
+            "[SUBSCRIBER] recv_stream: stream for subscription track_alias={}",
+            track_alias
         );
 
         let mlog = self.mlog.clone();
         let res = self.recv_stream_inner(reader, stream_header, mlog).await;
         if let Err(SessionError::Serve(err)) = &res {
             log::warn!(
-                "[SUBSCRIBER] recv_stream: stream processing error for id={}: {:?}",
-                id,
+                "[SUBSCRIBER] recv_stream: stream processing error for track_alias={}: {:?}",
+                track_alias,
                 err
             );
             // The writer is closed, so we should teriminate.
             // TODO it would be nice to do this immediately when the Writer is closed.
-            if let Some(subscribe) = self.subscribes.lock().unwrap().remove(&id) {
-                subscribe.error(err.clone())?;
+            if let Some(subscribe_id) = self.get_subscribe_id_by_alias(track_alias) {
+                if let Some(subscribe) = self.remove_subscribe(subscribe_id) {
+                    subscribe.error(err.clone())?;
+                }
             }
         }
 
         res
     }
 
+    /// Continue handling the reception of a new stream from the QUIC session.
     async fn recv_stream_inner(
         &mut self,
         reader: Reader,
         stream_header: data::StreamHeader,
         mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> Result<(), SessionError> {
-        // TODO SLG - used to use subscribe_id, using track_alias for now, needs fixing
-        let id = stream_header.subgroup_header.as_ref().unwrap().track_alias;
+        let track_alias = stream_header.subgroup_header.as_ref().unwrap().track_alias;
         log::trace!(
-            "[SUBSCRIBER] recv_stream_inner: processing stream for id={}",
-            id
+            "[SUBSCRIBER] recv_stream_inner: processing stream for track_alias={}",
+            track_alias
         );
 
         // This is super silly, but I couldn't figure out a way to avoid the mutex guard across awaits.
@@ -260,38 +316,60 @@ impl Subscriber {
         }
 
         let writer = {
-            let mut subscribes = self.subscribes.lock().unwrap();
-            let subscribe = subscribes.get_mut(&id).ok_or_else(|| {
-                log::error!(
-                    "[SUBSCRIBER] recv_stream_inner: subscription id={} not found",
-                    id
-                );
-                ServeError::NotFound
-            })?;
+            // Look up the subscribe id for this track alias
+            if let Some(subscribe_id) = self.get_subscribe_id_by_alias(track_alias) {
+                // Look up the subscribe by id
+                let mut subscribes = self.subscribes.lock().unwrap();
+                let subscribe = subscribes.get_mut(&subscribe_id).ok_or_else(|| {
+                    log::error!(
+                        "[SUBSCRIBER] recv_stream_inner: subscribe_id={} not found, track_alias={}",
+                        subscribe_id,
+                        track_alias
+                    );
+                    ServeError::NotFound
+                })?;
 
-            if stream_header.header_type.is_subgroup() {
-                log::trace!("[SUBSCRIBER] recv_stream_inner: creating subgroup writer");
-                Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
+                // Create the appropriate writer based on the stream header type
+                if stream_header.header_type.is_subgroup() {
+                    log::trace!("[SUBSCRIBER] recv_stream_inner: creating subgroup writer");
+                    Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
+                } else {
+                    log::error!(
+                        "[SUBSCRIBER] recv_stream_inner: stream header_type={} not supported",
+                        stream_header.header_type
+                    );
+                    return Err(SessionError::Serve(ServeError::Internal(format!(
+                        "unsupported stream header type={}",
+                        stream_header.header_type
+                    ))));
+                }
             } else {
-                panic!("Fetch not implemented yet!")
+                log::error!(
+                    "[SUBSCRIBER] recv_stream_inner: subscription track_alias={} not found",
+                    track_alias
+                );
+                return Err(SessionError::Serve(ServeError::NotFound));
             }
         };
 
+        // Handle the stream based on the writer type
         match writer {
             //Writer::Fetch(fetch) => Self::recv_fetch(fetch, reader).await?,
-            Writer::Subgroup(subgroup) => {
+            Writer::Subgroup(subgroup_writer) => {
                 log::trace!("[SUBSCRIBER] recv_stream_inner: receiving subgroup data");
-                Self::recv_subgroup(stream_header.header_type, subgroup, reader, mlog).await?
+                Self::recv_subgroup(stream_header.header_type, subgroup_writer, reader, mlog)
+                    .await?
             }
         };
 
         log::debug!(
-            "[SUBSCRIBER] recv_stream_inner: completed processing stream for id={}",
-            id
+            "[SUBSCRIBER] recv_stream_inner: completed processing stream for track_alias={}",
+            track_alias
         );
         Ok(())
     }
 
+    /// If new stream is a Subgroup stream, handle reception of subgroup objects and payloads.
     async fn recv_subgroup(
         stream_header_type: data::StreamHeaderType,
         mut subgroup_writer: serve::SubgroupWriter,
@@ -442,19 +520,19 @@ impl Subscriber {
         Ok(())
     }
 
+    /// Handle reception of a datagram from the QUIC session.
     pub fn recv_datagram(&mut self, datagram: bytes::Bytes) -> Result<(), SessionError> {
         let mut cursor = io::Cursor::new(datagram);
         let datagram = data::Datagram::decode(&mut cursor)?;
 
-        if let Some(subscribe) = self
-            .subscribes
-            .lock()
-            .unwrap()
-            .get_mut(&datagram.track_alias)
-        // TODO SLG - look up subscription with track_alias, not subscription id - fix me!
-        {
-            subscribe.datagram(datagram)?;
+        // Look up the subscribe id for this track alias
+        if let Some(subscribe_id) = self.get_subscribe_id_by_alias(datagram.track_alias) {
+            // Look up the subscribe by id
+            if let Some(subscribe) = self.subscribes.lock().unwrap().get_mut(&subscribe_id) {
+                subscribe.datagram(datagram)?;
+            }
         }
+        // TODO do we want to return an error if we can't find the subscribe?
 
         Ok(())
     }
