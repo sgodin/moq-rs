@@ -31,7 +31,7 @@ pub struct Subscriber {
     /// Map of track alias to subscription id for quick lookup when receiving streams/datagrams.
     subscribe_alias_map: Arc<Mutex<HashMap<u64, u64>>>,
 
-    /// The queue we will write any outbound control messages we want to sent, the session run_send task
+    /// The queue we will write any outbound control messages we want to send, the session run_send task
     /// will process the queue and send the message on the control stream.
     outgoing: Queue<Message>,
 
