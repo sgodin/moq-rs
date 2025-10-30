@@ -14,7 +14,11 @@ impl fmt::Debug for Value {
             Value::IntValue(v) => write!(f, "{}", v),
             Value::BytesValue(bytes) => {
                 // Show up to 16 bytes in hex for readability
-                let preview: Vec<String> = bytes.iter().take(16).map(|b| format!("{:02X}", b)).collect();
+                let preview: Vec<String> = bytes
+                    .iter()
+                    .take(16)
+                    .map(|b| format!("{:02X}", b))
+                    .collect();
                 write!(f, "[{}]", preview.join(" "))
             }
         }
