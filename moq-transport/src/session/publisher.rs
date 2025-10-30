@@ -386,7 +386,7 @@ impl Publisher {
         self.outgoing.push(msg.into()).ok();
     }
 
-    /// Send a message and wait until it is sent (or at least popped of the outgoing control message queue)
+    /// Send a message and wait until it is sent (or at least popped off the outgoing control message queue)
     pub(super) async fn send_message_and_wait<T: Into<message::Publisher> + Into<Message>>(
         &mut self,
         msg: T,
