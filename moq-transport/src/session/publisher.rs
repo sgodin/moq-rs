@@ -329,7 +329,7 @@ impl Publisher {
     fn recv_track_status(&mut self, msg: message::TrackStatus) -> Result<(), SessionError> {
         let namespace = msg.track_namespace.clone();
 
-        // Create TrackSTatusRequested to track this request
+        // Create TrackStatusRequested to track this request
         let track_status_requested = TrackStatusRequested::new(self.clone(), msg);
 
         // If we have an announce, route the track_status to it.
@@ -346,7 +346,7 @@ impl Publisher {
             .unknown_track_status_requested
             .push(track_status_requested)
         {
-            // Default to sending TrackStatusError with NotFound
+            // push only fails if the queue is dropped, send  TrackStatusError, Internal error
             err.respond_error(0, "Internal error")?;
         }
 
