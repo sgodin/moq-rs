@@ -1,7 +1,7 @@
 use std::ops;
 
 use crate::{
-    coding::TrackNamespace,
+    coding::{KeyValuePairs, Location, TrackNamespace},
     data,
     message::{self, FilterType, GroupOrder},
     serve::{self, ServeError, TrackWriter, TrackWriterMode},
@@ -11,10 +11,51 @@ use crate::watch::State;
 
 use super::Subscriber;
 
+// TODO rename to SubscriptionInfo when used for Publishes as well?
 #[derive(Debug, Clone)]
 pub struct SubscribeInfo {
-    pub namespace: TrackNamespace,
-    pub name: String,
+    pub id: u64,
+    pub track_namespace: TrackNamespace,
+    pub track_name: String,
+
+    /// Subscriber Priority
+    pub subscriber_priority: u8,
+    pub group_order: GroupOrder,
+
+    /// Forward Flag
+    pub forward: bool,
+
+    /// Filter type
+    pub filter_type: FilterType,
+
+    /// The starting location for this subscription. Only present for "AbsoluteStart" and "AbsoluteRange" filter types.
+    pub start_location: Option<Location>,
+    /// End group id, inclusive, for the subscription, if applicable. Only present for "AbsoluteRange" filter type.
+    pub end_group_id: Option<u64>,
+
+    /// Optional parameters
+    pub params: KeyValuePairs,
+
+    // Set to true if this is a track_status request only
+    pub track_status: bool,
+}
+
+impl SubscribeInfo {
+    pub fn new_from_subscribe(msg: &message::Subscribe) -> Self {
+        Self {
+            id: msg.id,
+            track_namespace: msg.track_namespace.clone(),
+            track_name: msg.track_name.clone(),
+            subscriber_priority: msg.subscriber_priority,
+            group_order: msg.group_order,
+            forward: msg.forward,
+            filter_type: msg.filter_type,
+            start_location: msg.start_location,
+            end_group_id: msg.end_group_id,
+            params: msg.params.clone(),
+            track_status: false,
+        }
+    }
 }
 
 struct SubscribeState {
@@ -38,7 +79,6 @@ impl Default for SubscribeState {
 pub struct Subscribe {
     state: State<SubscribeState>,
     subscriber: Subscriber,
-    request_id: u64,
 
     pub info: SubscribeInfo,
 }
@@ -49,7 +89,7 @@ impl Subscribe {
         request_id: u64,
         track: TrackWriter,
     ) -> (Subscribe, SubscribeRecv) {
-        subscriber.send_message(message::Subscribe {
+        let subscribe_message = message::Subscribe {
             id: request_id,
             track_namespace: track.namespace.clone(),
             track_name: track.name.clone(),
@@ -61,19 +101,16 @@ impl Subscribe {
             start_location: None,
             end_group_id: None,
             params: Default::default(),
-        });
-
-        let info = SubscribeInfo {
-            namespace: track.namespace.clone(),
-            name: track.name.clone(),
         };
+        let info = SubscribeInfo::new_from_subscribe(&subscribe_message);
+
+        subscriber.send_message(subscribe_message);
 
         let (send, recv) = State::default().split();
 
         let send = Subscribe {
             state: send,
             subscriber,
-            request_id,
             info,
         };
 
@@ -103,9 +140,8 @@ impl Subscribe {
 
 impl Drop for Subscribe {
     fn drop(&mut self) {
-        self.subscriber.send_message(message::Unsubscribe {
-            id: self.request_id,
-        });
+        self.subscriber
+            .send_message(message::Unsubscribe { id: self.info.id });
     }
 }
 

@@ -1,44 +1,18 @@
 use moq_native_ietf::quic;
-use std::net;
-use url::Url;
 
 use anyhow::Context;
-use clap::Parser;
 
+mod cli;
 mod clock;
+
+use clap::Parser;
+use cli::Cli;
 
 use moq_transport::{
     coding::TrackNamespace,
     serve,
     session::{Publisher, Subscriber},
 };
-
-#[derive(Parser, Clone)]
-pub struct Cli {
-    /// Listen for UDP packets on the given address.
-    #[arg(long, default_value = "[::]:0")]
-    pub bind: net::SocketAddr,
-
-    /// Connect to the given URL starting with https://
-    #[arg()]
-    pub url: Url,
-
-    /// The TLS configuration.
-    #[command(flatten)]
-    pub tls: moq_native_ietf::tls::Args,
-
-    /// Publish the current time to the relay, otherwise only subscribe.
-    #[arg(long)]
-    pub publish: bool,
-
-    /// The name of the clock track.
-    #[arg(long, default_value = "clock")]
-    pub namespace: String,
-
-    /// The name of the clock track.
-    #[arg(long, default_value = "now")]
-    pub track: String,
-}
 
 /// The main entry point for the MoQ Clock IETF example.
 #[tokio::main]
@@ -97,11 +71,15 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create MoQ Transport session")?;
 
-        let (track_writer, track_reader) = serve::Track::new(
-            TrackNamespace::from_utf8_path(&config.namespace),
-            config.track,
-        )
-        .produce();
+        let track_namespace = TrackNamespace::from_utf8_path(&config.namespace);
+
+        if config.track_status {
+            // Request a track_status for the clock track (testing purposes only)
+            subscriber.track_status(&track_namespace, &config.track);
+        }
+
+        let (track_writer, track_reader) =
+            serve::Track::new(track_namespace, config.track).produce();
 
         let clock_subscriber = clock::Subscriber::new(track_reader);
 

@@ -7,7 +7,7 @@ use moq_transport::{
 
 use crate::{Api, Locals, Producer};
 
-/// Consumer of tracks from a remote server.
+/// Consumer of tracks from a remote Publisher
 #[derive(Clone)]
 pub struct Consumer {
     remote: Subscriber,

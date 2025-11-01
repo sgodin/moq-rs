@@ -47,12 +47,7 @@ pub struct Subscribed {
     /// create new QUIC streams, and send datagrams
     publisher: Publisher,
 
-    /// The Subscribe request message that created this subscription
-    msg: message::Subscribe,
-
     /// The tracknamespace and trackname for the subscription.
-    /// TODO SLG - is this needed? we have this information in the stored Subscribe
-    ///            message.
     pub info: SubscribeInfo,
 
     state: State<SubscribedState>,
@@ -72,15 +67,10 @@ impl Subscribed {
         mlog: Option<Arc<Mutex<mlog::MlogWriter>>>,
     ) -> (Self, SubscribedRecv) {
         let (send, recv) = State::default().split();
-        let info = SubscribeInfo {
-            namespace: msg.track_namespace.clone(),
-            name: msg.track_name.clone(),
-        };
-
+        let info = SubscribeInfo::new_from_subscribe(&msg);
         let send = Self {
             publisher,
             state: send,
-            msg,
             info,
             ok: false,
             mlog,
@@ -103,7 +93,7 @@ impl Subscribed {
 
     async fn serve_inner(&mut self, track: serve::TrackReader) -> Result<(), SessionError> {
         // Update largest location before sending SubscribeOk
-        let largest_location = track.largest();
+        let largest_location = track.largest_location();
         self.state
             .lock_mut()
             .ok_or(ServeError::Cancel)?
@@ -114,9 +104,9 @@ impl Subscribed {
         // then they won't recognize the track_alias in the stream header.
         self.publisher
             .send_message_and_wait(message::SubscribeOk {
-                id: self.msg.id,
-                track_alias: self.msg.id, // use subscription id as track alias
-                expires: 0,               // TODO SLG
+                id: self.info.id,
+                track_alias: self.info.id, // use subscription id as track alias
+                expires: 0,                // TODO SLG
                 group_order: message::GroupOrder::Descending, // TODO: resolve correct value from publisher / subscriber prefs
                 content_exists: largest_location.is_some(),
                 largest_location,
@@ -182,14 +172,14 @@ impl Drop for Subscribed {
 
         if self.ok {
             self.publisher.send_message(message::PublishDone {
-                id: self.msg.id,
+                id: self.info.id,
                 status_code: err.code(),
                 stream_count: 0, // TODO SLG
                 reason: ReasonPhrase(err.to_string()),
             });
         } else {
             self.publisher.send_message(message::SubscribeError {
-                id: self.msg.id,
+                id: self.info.id,
                 error_code: err.code(),
                 reason_phrase: ReasonPhrase(err.to_string()),
             });
@@ -211,7 +201,7 @@ impl Subscribed {
                     Ok(Some(subgroup)) => {
                         let header = data::SubgroupHeader {
                             header_type: data::StreamHeaderType::SubgroupIdExt,  // SubGroupId = Yes, Extensions = Yes, ContainsEndOfGroup = No
-                            track_alias: self.msg.id, // use subscription id as track_alias
+                            track_alias: self.info.id, // use subscription id as track_alias
                             group_id: subgroup.group_id,
                             subgroup_id: Some(subgroup.subgroup_id),
                             publisher_priority: subgroup.priority,
@@ -374,7 +364,7 @@ impl Subscribed {
         while let Some(datagram) = datagrams.read().await? {
             let encoded_datagram = data::Datagram {
                 datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
-                track_alias: self.msg.id, // use subscription id as track_alias
+                track_alias: self.info.id, // use subscription id as track_alias
                 group_id: datagram.group_id,
                 object_id: Some(datagram.object_id),
                 publisher_priority: datagram.priority,
