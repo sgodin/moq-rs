@@ -52,18 +52,38 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("failed to create MoQ Transport session")?;
 
-        let (mut tracks_writer, _, tracks_reader) = serve::Tracks {
-            namespace: TrackNamespace::from_utf8_path(&config.namespace),
-        }
-        .produce();
+        if config.datagrams {
+            log::info!("publishing clock via datagrams");
 
-        let track_writer = tracks_writer.create(&config.track).unwrap();
-        let clock_publisher = clock::Publisher::new(track_writer.subgroups()?);
+            let (mut tracks_writer, _, tracks_reader) = serve::Tracks {
+                namespace: TrackNamespace::from_utf8_path(&config.namespace),
+            }
+            .produce();
 
-        tokio::select! {
-            res = session.run() => res.context("session error")?,
-            res = clock_publisher.run() => res.context("clock error")?,
-            res = publisher.announce(tracks_reader) => res.context("failed to serve tracks")?,
+            let track_writer = tracks_writer.create(&config.track).unwrap();
+            let clock_publisher = clock::Publisher::new_datagram(track_writer.datagrams()?);
+
+            tokio::select! {
+                res = session.run() => res.context("session error")?,
+                res = clock_publisher.run() => res.context("clock error")?,
+                res = publisher.announce(tracks_reader) => res.context("failed to serve tracks")?,
+            }
+        } else {
+            log::info!("publishing clock via streams");
+
+            let (mut tracks_writer, _, tracks_reader) = serve::Tracks {
+                namespace: TrackNamespace::from_utf8_path(&config.namespace),
+            }
+            .produce();
+
+            let track_writer = tracks_writer.create(&config.track).unwrap();
+            let clock_publisher = clock::Publisher::new(track_writer.subgroups()?);
+
+            tokio::select! {
+                res = session.run() => res.context("session error")?,
+                res = clock_publisher.run() => res.context("clock error")?,
+                res = publisher.announce(tracks_reader) => res.context("failed to serve tracks")?,
+            }
         }
     } else {
         // Create the subscriber session

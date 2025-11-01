@@ -1,7 +1,7 @@
 use anyhow::Context;
 use moq_transport::serve::{
-    DatagramsReader, StreamReader, Subgroup, SubgroupWriter, SubgroupsReader, SubgroupsWriter,
-    TrackReader, TrackReaderMode,
+    Datagram, DatagramsReader, DatagramsWriter, StreamReader, Subgroup, SubgroupWriter,
+    SubgroupsReader, SubgroupsWriter, TrackReader, TrackReaderMode,
 };
 
 use chrono::prelude::*;
@@ -9,13 +9,22 @@ use tokio::task;
 
 /// Publishes the current time every second in the format "YYYY-MM-DD HH:MM:SS"
 pub struct Publisher {
-    track_subgroups_writer: SubgroupsWriter,
+    track_subgroups_writer: Option<SubgroupsWriter>,
+    track_datagrams_writer: Option<DatagramsWriter>,
 }
 
 impl Publisher {
     pub fn new(track_subgroups_writer: SubgroupsWriter) -> Self {
         Self {
-            track_subgroups_writer,
+            track_subgroups_writer: Some(track_subgroups_writer),
+            track_datagrams_writer: None,
+        }
+    }
+
+    pub fn new_datagram(track_datagrams_writer: DatagramsWriter) -> Self {
+        Self {
+            track_subgroups_writer: None,
+            track_datagrams_writer: Some(track_datagrams_writer),
         }
     }
 
@@ -29,28 +38,47 @@ impl Publisher {
 
         // Create a new group for each minute.
         loop {
-            let subgroup_writer = self
-                .track_subgroups_writer
-                .create(Subgroup {
-                    group_id: next_group_id as u64,
-                    subgroup_id: 0,
-                    priority: 0,
-                })
-                .context("failed to create minute segment")?;
+            let mut next: DateTime<Utc>;
+            if let Some(track_subgroups_writer) = &mut self.track_subgroups_writer {
+                let subgroup_writer = track_subgroups_writer
+                    .create(Subgroup {
+                        group_id: next_group_id as u64,
+                        subgroup_id: 0,
+                        priority: 0,
+                    })
+                    .context("failed to create minute segment")?;
+
+                // Spawn a new task to handle sending the object every second
+                tokio::spawn(async move {
+                    if let Err(err) = Self::send_subgroup_objects(subgroup_writer, now).await {
+                        log::warn!("failed to send minute: {:?}", err);
+                    }
+                });
+
+                next = now + chrono::Duration::try_minutes(1).unwrap();
+                next = next.with_second(0).unwrap().with_nanosecond(0).unwrap();
+            } else if let Some(track_datagrams_writer) = &mut self.track_datagrams_writer {
+                let time_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
+                track_datagrams_writer
+                    .write(Datagram {
+                        group_id: next_group_id as u64,
+                        object_id: 0,
+                        priority: 127,
+                        payload: time_str.clone().into_bytes().into(),
+                    })
+                    .context("failed to write datagram")?;
+
+                println!("{}", time_str);
+
+                next = now + chrono::Duration::try_seconds(1).unwrap();
+                next = next.with_nanosecond(0).unwrap();
+            } else {
+                return Err(anyhow::anyhow!("no track writer available"));
+            }
 
             next_group_id += 1;
 
-            // Spawn a new task to handle sending the object every second
-            tokio::spawn(async move {
-                if let Err(err) = Self::send_subgroup_objects(subgroup_writer, now).await {
-                    log::warn!("failed to send minute: {:?}", err);
-                }
-            });
-
-            let next = now + chrono::Duration::try_minutes(1).unwrap();
-            let next = next.with_second(0).unwrap().with_nanosecond(0).unwrap();
-
-            // Sleep until the start of the next minute
+            // Sleep until the start of the next minute (stream mode) or next second (datagram mode)
             let delay = (next - now).to_std().unwrap();
             tokio::time::sleep(delay).await;
 

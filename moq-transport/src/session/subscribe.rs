@@ -220,23 +220,34 @@ impl SubscribeRecv {
     pub fn datagram(&mut self, datagram: data::Datagram) -> Result<(), ServeError> {
         let writer = self.writer.take().ok_or(ServeError::Done)?;
 
-        let mut datagrams = match writer {
-            TrackWriterMode::Track(track) => track.datagrams()?, // TODO SLG - is this needed?
-            TrackWriterMode::Datagrams(datagrams) => datagrams,
-            _ => return Err(ServeError::Mode),
-        };
-
-        // TODO SLG - update with new datagram fields
-        datagrams.write(serve::Datagram {
-            group_id: datagram.group_id,
-            // When object_id is not present in the datagram type, it implicitly means object 0
-            object_id: datagram.object_id.unwrap_or(0),
-            priority: datagram.publisher_priority,
-            // TODO: Handle status datagrams separately - they don't have payload
-            // For now, use empty bytes as fallback (shouldn't happen in practice for payload datagrams)
-            payload: datagram.payload.unwrap_or_default(),
-        })?;
-
-        Ok(())
+        match writer {
+            TrackWriterMode::Track(track) => {
+                // convert Track -> Datagrams writer, write, then put Datagrams back
+                let mut datagrams = track.datagrams()?;
+                datagrams.write(serve::Datagram {
+                    group_id: datagram.group_id,
+                    object_id: datagram.object_id.unwrap_or(0),
+                    priority: datagram.publisher_priority,
+                    payload: datagram.payload.unwrap_or_default(),
+                })?;
+                self.writer = Some(TrackWriterMode::Datagrams(datagrams));
+                Ok(())
+            }
+            TrackWriterMode::Datagrams(mut datagrams) => {
+                datagrams.write(serve::Datagram {
+                    group_id: datagram.group_id,
+                    object_id: datagram.object_id.unwrap_or(0),
+                    priority: datagram.publisher_priority,
+                    payload: datagram.payload.unwrap_or_default(),
+                })?;
+                self.writer = Some(TrackWriterMode::Datagrams(datagrams));
+                Ok(())
+            }
+            other => {
+                // preserve whatever unexpected mode was present, then report error
+                self.writer = Some(other);
+                Err(ServeError::Mode)
+            }
+        }
     }
 }
