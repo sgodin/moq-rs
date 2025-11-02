@@ -39,6 +39,39 @@ impl TrackNamespace {
         }
         path
     }
+
+    /// Returns the number of fields in the namespace.
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// Returns true if the namespace has no fields.
+    pub fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    /// Check if this namespace is a prefix of another namespace.
+    /// Returns true if all fields in `self` match the beginning fields of `other`.
+    pub fn is_prefix_of(&self, other: &TrackNamespace) -> bool {
+        if self.len() > other.len() {
+            return false;
+        }
+        self.fields
+            .iter()
+            .zip(other.fields.iter())
+            .all(|(a, b)| a == b)
+    }
+
+    /// Get all prefixes of this namespace, from longest to shortest (not including empty).
+    /// For example, "a/b/c" returns ["a/b/c", "a/b", "a"].
+    pub fn get_prefixes(&self) -> Vec<TrackNamespace> {
+        (1..=self.len())
+            .rev()
+            .map(|i| Self {
+                fields: self.fields[0..i].to_vec(),
+            })
+            .collect()
+    }
 }
 
 impl Hash for TrackNamespace {
@@ -164,5 +197,42 @@ mod tests {
             decoded.unwrap_err(),
             DecodeError::FieldBoundsExceeded(_)
         ));
+    }
+
+    #[test]
+    fn test_is_prefix_of() {
+        let ns1 = TrackNamespace::from_utf8_path("moq-test-00");
+        let ns2 = TrackNamespace::from_utf8_path("moq-test-00/1/2/3");
+        let ns3 = TrackNamespace::from_utf8_path("moq-test-00/1");
+        let ns4 = TrackNamespace::from_utf8_path("other");
+
+        // Test prefix matching
+        assert!(ns1.is_prefix_of(&ns2));
+        assert!(ns1.is_prefix_of(&ns3));
+        assert!(ns1.is_prefix_of(&ns1));
+        assert!(ns3.is_prefix_of(&ns2));
+
+        // Test non-matching
+        assert!(!ns2.is_prefix_of(&ns1)); // Longer is not prefix of shorter
+        assert!(!ns4.is_prefix_of(&ns1)); // Different namespace
+        assert!(!ns4.is_prefix_of(&ns2));
+    }
+
+    #[test]
+    fn test_get_prefixes() {
+        let ns = TrackNamespace::from_utf8_path("moq-test-00/1/2/3");
+        let prefixes = ns.get_prefixes();
+
+        assert_eq!(prefixes.len(), 4);
+        assert_eq!(prefixes[0].to_utf8_path(), "/moq-test-00/1/2/3");
+        assert_eq!(prefixes[1].to_utf8_path(), "/moq-test-00/1/2");
+        assert_eq!(prefixes[2].to_utf8_path(), "/moq-test-00/1");
+        assert_eq!(prefixes[3].to_utf8_path(), "/moq-test-00");
+
+        // Test single element
+        let ns_single = TrackNamespace::from_utf8_path("moq-test-00");
+        let prefixes_single = ns_single.get_prefixes();
+        assert_eq!(prefixes_single.len(), 1);
+        assert_eq!(prefixes_single[0].to_utf8_path(), "/moq-test-00");
     }
 }
