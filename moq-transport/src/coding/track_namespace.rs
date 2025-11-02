@@ -40,10 +40,20 @@ impl TrackNamespace {
         path
     }
 
+    /// Returns the number of fields in the namespace.
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// Returns true if the namespace has no fields.
+    pub fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
     /// Check if this namespace is a prefix of another namespace.
     /// Returns true if all fields in `self` match the beginning fields of `other`.
     pub fn is_prefix_of(&self, other: &TrackNamespace) -> bool {
-        if self.fields.len() > other.fields.len() {
+        if self.len() > other.len() {
             return false;
         }
         self.fields
@@ -55,13 +65,12 @@ impl TrackNamespace {
     /// Get all prefixes of this namespace, from longest to shortest (not including empty).
     /// For example, "a/b/c" returns ["a/b/c", "a/b", "a"].
     pub fn get_prefixes(&self) -> Vec<TrackNamespace> {
-        let mut prefixes = Vec::new();
-        for i in (1..=self.fields.len()).rev() {
-            let mut prefix = TrackNamespace::new();
-            prefix.fields = self.fields[0..i].to_vec();
-            prefixes.push(prefix);
-        }
-        prefixes
+        (1..=self.len())
+            .rev()
+            .map(|i| Self {
+                fields: self.fields[0..i].to_vec(),
+            })
+            .collect()
     }
 }
 

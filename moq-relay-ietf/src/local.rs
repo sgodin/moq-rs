@@ -56,7 +56,7 @@ impl Locals {
 
         for (registered_ns, tracks) in lookup.iter() {
             if registered_ns.is_prefix_of(namespace) {
-                let prefix_len = registered_ns.fields.len();
+                let prefix_len = registered_ns.len();
                 if best_match.is_none() || best_match.as_ref().unwrap().0 < prefix_len {
                     best_match = Some((prefix_len, tracks.clone()));
                 }

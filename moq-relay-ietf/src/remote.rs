@@ -137,21 +137,18 @@ impl RemotesConsumer {
         // Try all prefixes from longest to shortest
         let prefixes = namespace.get_prefixes();
 
-        let origin = {
-            let mut found_origin = None;
-            for prefix in prefixes {
-                match self.api.get_origin(&prefix.to_utf8_path()).await? {
-                    Some(origin) => {
-                        found_origin = Some(origin);
-                        break;
-                    }
-                    None => continue,
-                }
+        // Find the first matching origin
+        let mut origin = None;
+        for prefix in prefixes {
+            if let Some(o) = self.api.get_origin(&prefix.to_utf8_path()).await? {
+                origin = Some(o);
+                break;
             }
-            match found_origin {
-                None => return Ok(None),
-                Some(origin) => origin,
-            }
+        }
+
+        let origin = match origin {
+            None => return Ok(None),
+            Some(o) => o,
         };
 
         // Check if we already have a remote for this origin
