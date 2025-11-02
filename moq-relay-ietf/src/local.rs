@@ -50,10 +50,10 @@ impl Locals {
     /// Returns the TracksReader for the longest matching namespace prefix.
     pub fn route(&self, namespace: &TrackNamespace) -> Option<TracksReader> {
         let lookup = self.lookup.lock().unwrap();
-        
+
         // Find the longest matching prefix
         let mut best_match: Option<(usize, TracksReader)> = None;
-        
+
         for (registered_ns, tracks) in lookup.iter() {
             if registered_ns.is_prefix_of(namespace) {
                 let prefix_len = registered_ns.fields.len();
@@ -62,7 +62,7 @@ impl Locals {
                 }
             }
         }
-        
+
         best_match.map(|(_, tracks)| tracks)
     }
 }
@@ -163,6 +163,9 @@ mod tests {
         // Querying for a shorter namespace should not match
         let query_ns = TrackNamespace::from_utf8_path("moq-test-00/1");
         let result = locals.route(&query_ns);
-        assert!(result.is_none(), "Shorter namespace should not match longer registered namespace");
+        assert!(
+            result.is_none(),
+            "Shorter namespace should not match longer registered namespace"
+        );
     }
 }

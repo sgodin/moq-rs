@@ -136,7 +136,7 @@ impl RemotesConsumer {
     ) -> anyhow::Result<Option<RemoteConsumer>> {
         // Try all prefixes from longest to shortest
         let prefixes = namespace.get_prefixes();
-        
+
         let origin = {
             let mut found_origin = None;
             for prefix in prefixes {

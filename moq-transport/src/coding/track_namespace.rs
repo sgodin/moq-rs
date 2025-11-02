@@ -202,7 +202,7 @@ mod tests {
         assert!(ns1.is_prefix_of(&ns3));
         assert!(ns1.is_prefix_of(&ns1));
         assert!(ns3.is_prefix_of(&ns2));
-        
+
         // Test non-matching
         assert!(!ns2.is_prefix_of(&ns1)); // Longer is not prefix of shorter
         assert!(!ns4.is_prefix_of(&ns1)); // Different namespace
@@ -213,13 +213,13 @@ mod tests {
     fn test_get_prefixes() {
         let ns = TrackNamespace::from_utf8_path("moq-test-00/1/2/3");
         let prefixes = ns.get_prefixes();
-        
+
         assert_eq!(prefixes.len(), 4);
         assert_eq!(prefixes[0].to_utf8_path(), "/moq-test-00/1/2/3");
         assert_eq!(prefixes[1].to_utf8_path(), "/moq-test-00/1/2");
         assert_eq!(prefixes[2].to_utf8_path(), "/moq-test-00/1");
         assert_eq!(prefixes[3].to_utf8_path(), "/moq-test-00");
-        
+
         // Test single element
         let ns_single = TrackNamespace::from_utf8_path("moq-test-00");
         let prefixes_single = ns_single.get_prefixes();
