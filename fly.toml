@@ -1,4 +1,4 @@
-app = "englishm-moq-relay"
+app = "moq-rs-interop-relay"
 kill_signal = "SIGINT"
 kill_timeout = 5
 
