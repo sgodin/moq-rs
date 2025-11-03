@@ -25,7 +25,8 @@ This repository provides:
 - Both stream ("subgroup") and datagram delivery modes
 
 **Not Yet Supported:**
-- FETCH
+- SUBSCRIBE_NAMESPACE (Soon)
+- FETCH (Not Soon)
 
 ## Interoperability
 
