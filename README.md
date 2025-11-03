@@ -24,7 +24,7 @@ This repository provides:
 - WebTransport and raw QUIC transport layers
 - Both stream ("subgroup") and datagram delivery modes
 
-**Not Yet Supported:**
+**Not Supported:**
 - SUBSCRIBE_NAMESPACE (Soon)
 - FETCH (Not Soon)
 
