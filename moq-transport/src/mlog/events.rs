@@ -11,7 +11,6 @@
 //
 // TODO: Unimplemented data plane events (from draft-pardue-moq-qlog-moq-events):
 // - stream_type_set (when stream type becomes known)
-// - object_datagram_created/parsed
 // - object_datagram_status_created/parsed
 // - fetch_header_created/parsed
 // - fetch_object_created/parsed
@@ -60,6 +59,12 @@ pub enum EventData {
 
     #[serde(rename = "subgroup_object_created")]
     SubgroupObjectCreated(SubgroupObjectCreated),
+
+    #[serde(rename = "object_datagram_parsed")]
+    ObjectDatagramParsed(ObjectDatagramParsed),
+
+    #[serde(rename = "object_datagram_created")]
+    ObjectDatagramCreated(ObjectDatagramCreated),
 
     #[serde(rename = "loglevel")]
     LogLevel(LogLevelEvent),
@@ -126,6 +131,28 @@ pub struct SubgroupObjectParsed {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubgroupObjectCreated {
+    pub stream_id: u64,
+
+    /// Object-specific fields
+    #[serde(flatten)]
+    pub object: JsonValue,
+}
+
+/// Object Datagram parsed event (data plane)
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectDatagramParsed {
+    pub stream_id: u64,
+
+    /// Object-specific fields
+    #[serde(flatten)]
+    pub object: JsonValue,
+}
+
+/// Object Datagram created event (data plane)
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectDatagramCreated {
     pub stream_id: u64,
 
     /// Object-specific fields
@@ -492,10 +519,10 @@ pub fn go_away_created(time: f64, stream_id: u64, msg: &message::GoAway) -> Even
 /// Helper to convert SubgroupHeader to JSON
 fn subgroup_header_to_json(header: &data::SubgroupHeader) -> JsonValue {
     let mut json = json!({
+        "header_type": format!("{:?}", header.header_type),
         "track_alias": header.track_alias,
         "group_id": header.group_id,
         "publisher_priority": header.publisher_priority,
-        "header_type": format!("{:?}", header.header_type),
     });
 
     if let Some(subgroup_id) = header.subgroup_id {
@@ -540,7 +567,7 @@ fn subgroup_object_to_json(
         "group_id": group_id,
         "subgroup_id": subgroup_id,
         "object_id": object_id,
-        "extension_headers_length": 0,
+        // TODO send object_playload itself
         "object_payload_length": object.payload_length,
     });
 
@@ -596,12 +623,12 @@ fn subgroup_object_ext_to_json(
     object_id: u64,
     object: &data::SubgroupObjectExt,
 ) -> JsonValue {
-    // TODO encode extension headers
     let mut object_data = json!({
         "group_id": group_id,
         "subgroup_id": subgroup_id,
         "object_id": object_id,
-        "extension_headers_length": object.extension_headers.0.len(),
+        "extension_headers": key_value_pairs_to_vec(&object.extension_headers),
+        // TODO send object_playload itself
         "object_payload_length": object.payload_length,
     });
 
@@ -646,6 +673,53 @@ pub fn subgroup_object_ext_created(
         data: EventData::SubgroupObjectCreated(SubgroupObjectCreated {
             stream_id,
             object: subgroup_object_ext_to_json(group_id, subgroup_id, object_id, object),
+        }),
+    }
+}
+
+/// Helper to convert Datagram to JSON
+fn object_datagram_to_json(datagram: &data::Datagram) -> JsonValue {
+    let mut json = json!({
+        "datagram_type": format!("{:?}", datagram.datagram_type),
+        "track_alias": datagram.track_alias,
+        "group_id": datagram.group_id,
+        "object_id": datagram.object_id.unwrap_or(0),
+        "publisher_priority": datagram.publisher_priority,
+        // TODO send object_playload
+        "payload_length": datagram.payload.as_ref().map_or(0, |p| p.len()),
+    });
+
+    if let Some(extension_headers) = &datagram.extension_headers {
+        json["extension_headers"] = json!(key_value_pairs_to_vec(extension_headers));
+    }
+
+    if let Some(status) = datagram.status {
+        json["object_status"] = json!(format!("{:?}", status));
+    }
+
+    json
+}
+
+/// Create a object_datagram_parsed event
+pub fn object_datagram_parsed(time: f64, stream_id: u64, datagram: &data::Datagram) -> Event {
+    Event {
+        time,
+        name: "moqt:object_datagram_parsed".to_string(),
+        data: EventData::ObjectDatagramParsed(ObjectDatagramParsed {
+            stream_id,
+            object: object_datagram_to_json(datagram),
+        }),
+    }
+}
+
+/// Create a object_datagram_created event
+pub fn object_datagram_created(time: f64, stream_id: u64, datagram: &data::Datagram) -> Event {
+    Event {
+        time,
+        name: "moqt:object_datagram_created".to_string(),
+        data: EventData::ObjectDatagramCreated(ObjectDatagramCreated {
+            stream_id,
+            object: object_datagram_to_json(datagram),
         }),
     }
 }

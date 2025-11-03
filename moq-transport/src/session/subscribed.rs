@@ -382,14 +382,28 @@ impl Subscribed {
             encoded_datagram.encode(&mut buffer)?;
 
             log::debug!(
-                "[PUBLISHER] serve_datagrams: sending datagram #{} - group_id={}, object_id={}, priority={}, payload_len={}, total_encoded_len={}",
+                "[PUBLISHER] serve_datagrams: sending datagram #{} - track_alias={}, group_id={}, object_id={}, priority={}, payload_len={}, total_encoded_len={}",
                 datagram_count + 1,
+                encoded_datagram.track_alias,
                 encoded_datagram.group_id,
                 encoded_datagram.object_id.unwrap(),
                 encoded_datagram.publisher_priority,
                 payload_len,
                 buffer.len()
             );
+
+            // Create mlog event for datagram created
+            if let Some(ref mlog) = self.mlog {
+                if let Ok(mut mlog_guard) = mlog.lock() {
+                    let time = mlog_guard.elapsed_ms();
+                    let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                    let _ = mlog_guard.add_event(mlog::object_datagram_created(
+                        time,
+                        stream_id,
+                        &encoded_datagram,
+                    ));
+                }
+            }
 
             self.publisher.send_datagram(buffer.into()).await?;
 
