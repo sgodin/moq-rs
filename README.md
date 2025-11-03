@@ -1,108 +1,89 @@
-<p align="center">
-	<img height="128px" src="https://github.com/kixelated/moq-rs/blob/main/.github/logo.svg" alt="Media over QUIC">
-</p>
+# moq-rs
 
-Media over QUIC (MoQ) is a live media delivery protocol utilizing QUIC streams.
-See [quic.video](https://quic.video) for more information.
+An implementation of the Media over QUIC Transport (MoQT) protocol for live media delivery over QUIC, as specified by the IETF MoQ working group.
 
-This repository contains a few crates:
+This codebase was originally created by [Luke Curley (@kixelated)](https://github.com/kixelated). [Mike English (@englishm)](https://github.com/englishm) contributed to early design and has maintained this IETF-aligned fork. The project is now maintained by Cloudflare. The implementation targets [draft-ietf-moq-transport-14](https://datatracker.ietf.org/doc/draft-ietf-moq-transport/14/).
 
--   **moq-relay**: Accepting content from publishers and serves it to any subscribers.
--   **moq-pub**: Publishes fMP4 broadcasts.
--   **moq-transport**: An implementation of the underlying MoQ protocol.
--   **moq-api**: A HTTP API server that stores the origin for each broadcast, backed by redis.
--   **moq-dir**: Aggregates announcements, used to discover broadcasts.
--   **moq-clock**: A dumb clock client/server just to prove MoQ is more than media.
+## Protocol Support
 
-There's currently no way to view media with this repo; you'll need to use [moq-js](https://github.com/kixelated/moq-js) for that.
-A hosted version is available at [quic.video](https://quic.video) and accepts the `?host=localhost:4443` query parameter.
+The `main` branch targets **draft-14** of the MoQT specification. For draft-07 compatibility (used in [Cloudflare's current production deployment](https://developers.cloudflare.com/moq/)), see the [`draft-ietf-moq-transport-07`](https://github.com/cloudflare/moq-rs/tree/draft-ietf-moq-transport-07) branch.
 
-# Development
+### What's Included
 
-Launch a basic cluster, including provisioning certs and deploying root certificates:
+This repository provides:
+- **moq-transport**: A complete MoQT protocol library implementation
+- **moq-relay-ietf**: A production-ready relay server
+- **Sample clients**: An fMP4 publisher (moq-pub) and a demonstration clock application (moq-clock-ietf)
 
+### Protocol Feature Support
+
+**Supported:**
+- CLIENT_SETUP / SERVER_SETUP
+- PUBLISH_NAMESPACE
+- SUBSCRIBE
+- WebTransport and raw QUIC transport layers
+- Both stream ("subgroup") and datagram delivery modes
+
+**Not Supported:**
+- SUBSCRIBE_NAMESPACE (Soon)
+- FETCH (Not Soon)
+
+## Interoperability
+
+A public relay instance running the latest `main` branch is available for interop testing at:
 ```
-make run
-```
-
-Then, visit https://quic.video/publish/?server=localhost:4443.
-
-For more control, use the [dev helper scripts](dev/README.md).
-
-# Usage
-
-## moq-relay
-
-[moq-relay](moq-relay) is a server that forwards subscriptions from publishers to subscribers, caching and deduplicating along the way.
-It's designed to be run in a datacenter, relaying media across multiple hops to deduplicate and improve QoS.
-The relays optionally register themselves via the [moq-api](moq-api) endpoints, which is used to discover other relays and share broadcasts.
-
-Notable arguments:
-
--   `--bind <ADDR>` Listen on this address, default: `[::]:4443`
--   `--tls-cert <CERT>` Use the certificate file at this path
--   `--tls-key <KEY>` Use the private key at this path
--   `--announce <URL>` Forward all announcements to this instance, typically [moq-dir](moq-dir).
-
-This listens for WebTransport connections on `UDP https://localhost:4443` by default.
-You need a client to connect to that address, to both publish and consume media.
-
-## moq-pub
-
-A client that publishes a fMP4 stream over MoQ, with a few restrictions.
-
--   `separate_moof`: Each fragment must contain a single track.
--   `frag_keyframe`: A keyframe must be at the start of each keyframe.
--   `fragment_per_frame`: (optional) Each frame should be a separate fragment to minimize latency.
-
-This client can currently be used in conjuction with either ffmpeg or gstreamer.
-
-### ffmpeg
-
-moq-pub can be run as a binary, accepting a stream (from ffmpeg via stdin) and publishing it to the given relay.
-See [dev/pub](dev/pub) for the required ffmpeg flags.
-
-### gstreamer
-
-moq-pub can also be run as a library, currently used for a [gstreamer plugin](https://github.com/kixelated/moq-gst).
-This is in a separate repository to avoid gstreamer being a hard requirement.
-See [run](https://github.com/kixelated/moq-gst/blob/main/run) for an example pipeline.
-
-## moq-transport
-
-A media-agnostic library used by [moq-relay](moq-relay) and [moq-pub](moq-pub) to serve the underlying subscriptions.
-It has caching/deduplication built-in, so your application is oblivious to the number of connections under the hood.
-
-See the published [crate](https://crates.io/crates/moq-transport) and [documentation](https://docs.rs/moq-transport/latest/moq_transport/).
-
-## moq-clock
-
-[moq-clock](moq-clock) is a simple client that can publish or subscribe to the current time.
-It's meant to demonstate that [moq-transport](moq-transport) can be used for more than just media.
-
-## moq-dir
-
-[moq-dir](moq-dir) is a server that aggregates announcements.
-It produces tracks based on the prefix, which are subscribable and can be used to discover broadcasts.
-
-For example, if a client announces the broadcast `.public.room.12345.alice`, then `moq-dir` will produce the following track:
-
-```
-TRACK namespace=. track=public.room.12345.
-OBJECT +alice
+https://interop-relay.cloudflare.mediaoverquic.com:443
 ```
 
-Use the `--announce <moq-dir-url>` flag when running the relay to forward all announcements to the instance.
+As an implementation targeting the IETF specification, this codebase should be compatible with other implementations targeting the same draft version. See the [moq-wg/moq-transport wiki](https://github.com/moq-wg/moq-transport/wiki/Interop) for a list of other implementations.
 
-## moq-api
+For streaming format compatibility:
+- **[video-dev/moq-js](https://github.com/video-dev/moq-js)**: A TypeScript player implementation compatible with moq-pub's fMP4 output. Check draft version compatibility when selecting branches.
+- **[gst-moq-pub](https://github.com/rafaelcaricio/gst-moq-pub)**: A GStreamer publisher plugin built on moq-pub, also compatible with moq-js.
 
-This is a API server that exposes a REST API.
-It's used by relays to inserts themselves as origins when publishing, and to find the origin when subscribing.
-It's basically just a thin wrapper around redis that is only needed to run multiple relays in a (simple) cluster.
+## Components
 
-# License
+This repository contains several crates:
+
+- **moq-transport**: A media-agnostic library implementing the core MoQT protocol.
+  - **moq-native-ietf**: QUIC and TLS utilities for native transport.
+- **moq-relay-ietf**: A relay server that forwards content from publishers to subscribers, with caching and deduplication.
+  - **moq-api**: An HTTP API server for origin discovery and relay coordination, backed by Redis.
+- **moq-pub**: A publisher client that broadcasts fMP4 streams over MoQT.
+  - **moq-catalog**: Catalog format handling.
+  - **moq-sub**: A subscriber client for consuming MoQT streams.
+- **moq-clock-ietf**: A simple time publisher/subscriber demonstrating non-media use cases.
+
+## Development
+
+Typical development workflow:
+
+1. Start a local relay in one terminal:
+   ```bash
+   ./dev/relay
+   ```
+
+2. Start a publisher in another terminal:
+   ```bash
+   ./dev/pub
+   ```
+   Add `--tls-disable-verify` if you prefer not to install local certificates.
+
+3. For playback, clone and run [moq-js](https://github.com/video-dev/moq-js) locally, then open it in a browser pointed at your local relay.
+
+See the [dev helper scripts](dev/README.md) for more options and workflows.
+
+## Usage
+
+For detailed usage information, see the README in each crate directory:
+- [moq-transport](moq-transport/README.md) - Protocol library documentation
+- [moq-relay-ietf](moq-relay-ietf/README.md) - Relay server configuration
+- [moq-pub](moq-pub/README.md) - Publisher client usage
+
+The moq-transport crate is also published on [crates.io](https://crates.io/crates/moq-transport) with [API documentation](https://docs.rs/moq-transport/latest/moq_transport/).
+
+## License
 
 Licensed under either:
-
--   Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
--   MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
