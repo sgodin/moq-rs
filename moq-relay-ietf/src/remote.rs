@@ -129,26 +129,14 @@ impl RemotesConsumer {
     }
 
     /// Route to a remote origin based on the namespace.
-    /// Tries hierarchical prefix matching from longest to shortest.
     pub async fn route(
         &self,
         namespace: &TrackNamespace,
     ) -> anyhow::Result<Option<RemoteConsumer>> {
-        // Try all prefixes from longest to shortest
-        let prefixes = namespace.get_prefixes();
-
-        // Find the first matching origin
-        let mut origin = None;
-        for prefix in prefixes {
-            if let Some(o) = self.api.get_origin(&prefix.to_utf8_path()).await? {
-                origin = Some(o);
-                break;
-            }
-        }
-
-        let origin = match origin {
+        // Always fetch the origin instead of using the (potentially invalid) cache.
+        let origin = match self.api.get_origin(&namespace.to_utf8_path()).await? {
             None => return Ok(None),
-            Some(o) => o,
+            Some(origin) => origin,
         };
 
         // Check if we already have a remote for this origin
