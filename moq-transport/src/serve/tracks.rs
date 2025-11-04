@@ -84,11 +84,7 @@ impl TracksWriter {
     }
 
     /// Remove a track from the broadcast by full name.
-    pub fn remove(
-        &mut self,
-        namespace: &TrackNamespace,
-        track_name: &str,
-    ) -> Option<TrackReader> {
+    pub fn remove(&mut self, namespace: &TrackNamespace, track_name: &str) -> Option<TrackReader> {
         let full_name = FullTrackName {
             namespace: namespace.clone(),
             name: track_name.to_owned(),

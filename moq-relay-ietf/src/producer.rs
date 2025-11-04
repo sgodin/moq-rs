@@ -80,10 +80,9 @@ impl Producer {
         // Check local tracks first, and serve from local if possible
         if let Some(mut local) = self.locals.route(&subscribed.track_namespace) {
             // Pass the full requested namespace, not the announced prefix
-            if let Some(track) = local.subscribe(
-                subscribed.track_namespace.clone(),
-                &subscribed.track_name,
-            ) {
+            if let Some(track) =
+                local.subscribe(subscribed.track_namespace.clone(), &subscribed.track_name)
+            {
                 log::info!("serving subscribe from local: {:?}", track.info);
                 return Ok(subscribed.serve(track).await?);
             }
