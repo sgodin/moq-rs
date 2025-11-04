@@ -56,8 +56,8 @@ pub enum DecodeError {
     BoundsExceeded(#[from] BoundsExceeded),
 
     // TODO move these to ParamError
-    #[error("duplicate parameter")]
-    DupliateParameter,
+    #[error("duplicate parameter: {0:?}")]
+    DupliateParameter(u64),
 
     #[error("missing parameter")]
     MissingParameter,
