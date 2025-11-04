@@ -46,9 +46,32 @@ impl Locals {
         Ok(registration)
     }
 
-    /// Lookup local tracks by namespace.
+    /// Lookup local tracks by namespace using hierarchical prefix matching.
+    /// Returns the TracksReader for the longest matching namespace prefix.
     pub fn route(&self, namespace: &TrackNamespace) -> Option<TracksReader> {
-        self.lookup.lock().unwrap().get(namespace).cloned()
+        let lookup = self.lookup.lock().unwrap();
+
+        // Find the longest matching prefix
+        let mut best_match: Option<TracksReader> = None;
+        let mut best_len = 0;
+
+        for (registered_ns, tracks) in lookup.iter() {
+            // Check if registered_ns is a prefix of namespace
+            if namespace.fields.len() >= registered_ns.fields.len() {
+                let is_prefix = registered_ns
+                    .fields
+                    .iter()
+                    .zip(namespace.fields.iter())
+                    .all(|(a, b)| a == b);
+
+                if is_prefix && registered_ns.fields.len() > best_len {
+                    best_match = Some(tracks.clone());
+                    best_len = registered_ns.fields.len();
+                }
+            }
+        }
+
+        best_match
     }
 }
 

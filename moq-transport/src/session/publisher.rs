@@ -167,7 +167,10 @@ impl Publisher {
         subscribed: Subscribed,
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
-        if let Some(track) = tracks.subscribe(&subscribed.track_name) {
+        if let Some(track) = tracks.subscribe(
+            subscribed.info.track_namespace.clone(),
+            &subscribed.info.track_name,
+        ) {
             subscribed.serve(track).await?;
         } else {
             subscribed.close(ServeError::NotFound)?;
@@ -181,7 +184,10 @@ impl Publisher {
         mut tracks: TracksReader,
     ) -> Result<(), SessionError> {
         let track = tracks
-            .subscribe(&track_status_request.request_msg.track_name.clone())
+            .subscribe(
+                track_status_request.request_msg.track_namespace.clone(),
+                &track_status_request.request_msg.track_name,
+            )
             .ok_or(ServeError::NotFound)?;
 
         track_status_request.respond_ok(&track)?;

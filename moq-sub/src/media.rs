@@ -107,7 +107,11 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
                     });
                 });
 
-                tracks.push(self.broadcast.subscribe(&name).context("no track")?);
+                tracks.push(
+                    self.broadcast
+                        .subscribe(self.broadcast.namespace.clone(), &name)
+                        .context("no track")?,
+                );
             }
         }
 
@@ -145,7 +149,7 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
 
         let track = self
             .broadcast
-            .subscribe(track_name)
+            .subscribe(self.broadcast.namespace.clone(), track_name)
             .context(format!("no {alias} track"))?;
         let mut group = match track.mode().await? {
             TrackReaderMode::Subgroups(mut groups) => {

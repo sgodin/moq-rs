@@ -16,6 +16,13 @@ use super::{ServeError, Track, TrackReader, TrackWriter};
 use crate::coding::TrackNamespace;
 use crate::watch::{Queue, State};
 
+/// Full track identifier: namespace + track name
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct FullTrackName {
+    pub namespace: TrackNamespace,
+    pub name: String,
+}
+
 /// Static information about a broadcast.
 #[derive(Debug)]
 pub struct Tracks {
@@ -42,7 +49,7 @@ impl Tracks {
 
 #[derive(Default)]
 pub struct TracksState {
-    tracks: HashMap<String, TrackReader>,
+    tracks: HashMap<FullTrackName, TrackReader>,
 }
 
 /// Publish new tracks for a broadcast by name.
@@ -57,6 +64,7 @@ impl TracksWriter {
     }
 
     /// Create a new track with the given name, inserting it into the broadcast.
+    /// The track will use this writer's namespace.
     /// None is returned if all [TracksReader]s have been dropped.
     pub fn create(&mut self, track: &str) -> Option<TrackWriter> {
         let (writer, reader) = Track {
@@ -66,17 +74,26 @@ impl TracksWriter {
         .produce();
 
         // NOTE: We overwrite the track if it already exists.
-        self.state
-            .lock_mut()?
-            .tracks
-            .insert(track.to_owned(), reader);
+        let full_name = FullTrackName {
+            namespace: self.namespace.clone(),
+            name: track.to_owned(),
+        };
+        self.state.lock_mut()?.tracks.insert(full_name, reader);
 
         Some(writer)
     }
 
-    /// Remove a track from the broadcast by name.
-    pub fn remove(&mut self, track_name: &str) -> Option<TrackReader> {
-        self.state.lock_mut()?.tracks.remove(track_name)
+    /// Remove a track from the broadcast by full name.
+    pub fn remove(
+        &mut self,
+        namespace: &TrackNamespace,
+        track_name: &str,
+    ) -> Option<TrackReader> {
+        let full_name = FullTrackName {
+            namespace: namespace.clone(),
+            name: track_name.to_owned(),
+        };
+        self.state.lock_mut()?.tracks.remove(&full_name)
     }
 }
 
@@ -143,28 +160,46 @@ impl TracksReader {
         Self { state, queue, info }
     }
 
-    /// Get a track from the broadcast by name, if it exists.
-    pub fn get_track_reader(&mut self, track_name: &str) -> Option<TrackReader> {
+    /// Get a track from the broadcast by full name, if it exists.
+    pub fn get_track_reader(
+        &mut self,
+        namespace: &TrackNamespace,
+        track_name: &str,
+    ) -> Option<TrackReader> {
         let state = self.state.lock();
+        let full_name = FullTrackName {
+            namespace: namespace.clone(),
+            name: track_name.to_owned(),
+        };
 
-        if let Some(track_reader) = state.tracks.get(track_name) {
+        if let Some(track_reader) = state.tracks.get(&full_name) {
             return Some(track_reader.clone());
         }
         None
     }
 
-    /// Get or request a track from the broadcast by name.
+    /// Get or request a track from the broadcast by full name.
+    /// The namespace parameter should be the full requested namespace, not just the announced prefix.
     /// None is returned if [TracksWriter] or [TracksRequest] cannot fufill the request.
-    pub fn subscribe(&mut self, track_name: &str) -> Option<TrackReader> {
+    pub fn subscribe(
+        &mut self,
+        namespace: TrackNamespace,
+        track_name: &str,
+    ) -> Option<TrackReader> {
         let state = self.state.lock();
+        let full_name = FullTrackName {
+            namespace: namespace.clone(),
+            name: track_name.to_owned(),
+        };
 
-        if let Some(track_reader) = state.tracks.get(track_name) {
+        if let Some(track_reader) = state.tracks.get(&full_name) {
             return Some(track_reader.clone());
         }
 
         let mut state = state.into_mut()?;
+        // Use the full requested namespace, not self.namespace
         let track_writer_reader = Track {
-            namespace: self.namespace.clone(),
+            namespace: namespace.clone(),
             name: track_name.to_owned(),
         }
         .produce();
@@ -173,10 +208,10 @@ impl TracksReader {
             return None;
         }
 
-        // We requested the track sucessfully so we can deduplicate it.
+        // We requested the track sucessfully so we can deduplicate it by full name.
         state
             .tracks
-            .insert(track_name.to_owned(), track_writer_reader.1.clone());
+            .insert(full_name, track_writer_reader.1.clone());
 
         Some(track_writer_reader.1.clone())
     }
