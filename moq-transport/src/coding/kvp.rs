@@ -1,4 +1,5 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
+use bytes::Buf;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -145,12 +146,26 @@ impl KeyValuePairs {
 }
 
 impl Decode for KeyValuePairs {
-    fn decode<R: bytes::Buf>(mut r: &mut R) -> Result<Self, DecodeError> {
-        let mut kvps = HashMap::new();
+    fn decode<R: bytes::Buf>(r: &mut R) -> Result<Self, DecodeError> {
+        // Read total byte length of the encoded kvps
+        let length = usize::decode(r)?;
 
-        let count = u64::decode(r)?;
-        for _ in 0..count {
-            let kvp = KeyValuePair::decode(&mut r)?;
+        // Ensure we have that many bytes available in the input
+        Self::decode_remaining(r, length)?;
+
+        // If zero length, return empty map
+        if length == 0 {
+            return Ok(KeyValuePairs::new());
+        }
+
+        // Copy the exact slice that contains the encoded kvps and decode from it
+        let mut buf = vec![0u8; length];
+        r.copy_to_slice(&mut buf);
+        let mut kvps_bytes = bytes::Bytes::from(buf);
+
+        let mut kvps = HashMap::new();
+        while kvps_bytes.has_remaining() {
+            let kvp = KeyValuePair::decode(&mut kvps_bytes)?;
             if kvps.contains_key(&kvp.key) {
                 return Err(DecodeError::DuplicateParameter(kvp.key));
             }
@@ -163,11 +178,15 @@ impl Decode for KeyValuePairs {
 
 impl Encode for KeyValuePairs {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
-        self.0.len().encode(w)?;
-
-        for kvpi in self.0.iter() {
-            kvpi.1.encode(w)?;
+        // Encode all KeyValuePair entries into a temporary buffer to compute total byte length
+        let mut tmp = bytes::BytesMut::new();
+        for kvp in self.0.values() {
+            kvp.encode(&mut tmp)?;
         }
+
+        // Write total byte length (u64) followed by the encoded bytes
+        (tmp.len() as u64).encode(w)?;
+        w.put_slice(&tmp);
 
         Ok(())
     }
@@ -248,7 +267,7 @@ mod tests {
         assert_eq!(
             buf.to_vec(),
             vec![
-                0x01, // 1 KeyValuePair
+                0x07, // 7 bytes total length
                 0x01, 0x05, 0x01, 0x02, 0x03, 0x04, 0x05, // Key=1, Value=[1,2,3,4,5]
             ]
         );
@@ -256,16 +275,16 @@ mod tests {
         assert_eq!(decoded, kvps);
 
         let mut kvps = KeyValuePairs::new();
-        kvps.set_intvalue(0, 0);
-        kvps.set_intvalue(100, 100);
-        kvps.set_bytesvalue(1, vec![0x01, 0x02, 0x03, 0x04, 0x05]);
+        kvps.set_intvalue(0, 0); // 2 bytes
+        kvps.set_intvalue(100, 100); // 4 bytes
+        kvps.set_bytesvalue(1, vec![0x01, 0x02, 0x03, 0x04, 0x05]); // 1 byte key, 1 byte length, 5 bytes data = 7 bytes
         kvps.encode(&mut buf).unwrap();
         let buf_vec = buf.to_vec();
         // Note:  Since KeyValuePairs is a HashMap, the order of KeyValuePairs in
         //        the encoded buffer is not guaranteed, so we can't validate the entire buffer,
-        //        just validate the ecncoded length and the KeyValuePair count.
-        assert_eq!(14, buf_vec.len()); // 14 bytes total
-        assert_eq!(3, buf_vec[0]); // 3 KeyValuePairs
+        //        just validate the encoded length and the KeyValuePair length.
+        assert_eq!(14, buf_vec.len()); // 14 bytes total (length + 3 kvps)
+        assert_eq!(13, buf_vec[0]); // 13 bytes for the 3 KeyValuePairs data
         let decoded = KeyValuePairs::decode(&mut buf).unwrap();
         assert_eq!(decoded, kvps);
     }
