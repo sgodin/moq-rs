@@ -550,14 +550,39 @@ impl Subscriber {
         let mut cursor = io::Cursor::new(datagram);
         let datagram = data::Datagram::decode(&mut cursor)?;
 
+        if let Some(ref mlog) = self.mlog {
+            if let Ok(mut mlog_guard) = mlog.lock() {
+                let time = mlog_guard.elapsed_ms();
+                let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
+                let _ =
+                    mlog_guard.add_event(mlog::object_datagram_parsed(time, stream_id, &datagram));
+            }
+        }
+
         // Look up the subscribe id for this track alias
         if let Some(subscribe_id) = self.get_subscribe_id_by_alias(datagram.track_alias) {
             // Look up the subscribe by id
             if let Some(subscribe) = self.subscribes.lock().unwrap().get_mut(&subscribe_id) {
+                log::trace!(
+                    "[SUBSCRIBER] recv_datagram: track_alias={}, group_id={}, object_id={}, publisher_priority={}, status={}, payload_length={}",
+                    datagram.track_alias,
+                    datagram.group_id,
+                    datagram.object_id.unwrap_or(0),
+                    datagram.publisher_priority,
+                    datagram.status.as_ref().map_or("None".to_string(), |s| format!("{:?}", s)),
+                    datagram.payload.as_ref().map_or(0, |p| p.len()));
                 subscribe.datagram(datagram)?;
             }
+        } else {
+            log::warn!(
+                "[SUBSCRIBER] recv_datagram: discarded due to unknown track_alias: track_alias={}, group_id={}, object_id={}, publisher_priority={}, status={}, payload_length={}",
+                datagram.track_alias,
+                datagram.group_id,
+                datagram.object_id.unwrap_or(0),
+                datagram.publisher_priority,
+                datagram.status.as_ref().map_or("None".to_string(), |s| format!("{:?}", s)),
+                datagram.payload.as_ref().map_or(0, |p| p.len()));
         }
-        // TODO do we want to return an error if we can't find the subscribe?
 
         Ok(())
     }
