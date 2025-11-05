@@ -169,10 +169,9 @@ pub struct LogLevelEvent {
 }
 
 // Helper functions to create vector of string pairs from KVPs
-fn key_value_pairs_to_vec(kvps: &coding::KeyValuePairs) -> Vec<(String, String)> {
-    kvps.0
-        .iter()
-        .map(|(k, v)| (k.to_string(), format!("{:?}", v.value)))
+fn key_value_pairs_to_vec(kvps: &[coding::KeyValuePair]) -> Vec<(String, String)> {
+    kvps.iter()
+        .map(|kvp| (kvp.key.to_string(), format!("{:?}", kvp.value)))
         .collect()
 }
 
@@ -218,7 +217,7 @@ pub fn client_setup_parsed(time: f64, stream_id: u64, msg: &setup::Client) -> Ev
         {
             "number_of_supported_versions": msg.versions.0.len(),
             "supported_versions": versions,
-            "parameters": key_value_pairs_to_vec(&msg.params),
+            "parameters": key_value_pairs_to_vec(&msg.params.0),
         }),
     )
 }
@@ -233,7 +232,7 @@ pub fn server_setup_created(time: f64, stream_id: u64, msg: &setup::Server) -> E
         json!(
         {
             "selected_version": format!("{:?}", msg.version),
-            "parameters": key_value_pairs_to_vec(&msg.params),
+            "parameters": key_value_pairs_to_vec(&msg.params.0),
         }),
     )
 }
@@ -247,7 +246,7 @@ fn subscribe_to_json(msg: &message::Subscribe) -> JsonValue {
         "subscriber_priority": msg.subscriber_priority,
         "group_order": format!("{:?}", msg.group_order),
         "filter_type": format!("{:?}", msg.filter_type),
-        "parameters": key_value_pairs_to_vec(&msg.params),
+        "parameters": key_value_pairs_to_vec(&msg.params.0),
     });
 
     // Add optional fields based on filter type
@@ -280,7 +279,7 @@ fn subscribe_ok_to_json(msg: &message::SubscribeOk) -> JsonValue {
         "expires": msg.expires,
         "group_order": format!("{:?}", msg.group_order),
         "content_exists": msg.content_exists,
-        "parameters": key_value_pairs_to_vec(&msg.params),
+        "parameters": key_value_pairs_to_vec(&msg.params.0),
     });
 
     // Add optional largest_location fields if content exists
@@ -352,7 +351,7 @@ fn publish_namespace_to_json(msg: &message::PublishNamespace) -> JsonValue {
     json!({
         "request_id": msg.id,
         "track_namespace": msg.track_namespace.to_string(),
-        "parameters": key_value_pairs_to_vec(&msg.params),
+        "parameters": key_value_pairs_to_vec(&msg.params.0),
     })
 }
 
@@ -627,7 +626,7 @@ fn subgroup_object_ext_to_json(
         "group_id": group_id,
         "subgroup_id": subgroup_id,
         "object_id": object_id,
-        "extension_headers": key_value_pairs_to_vec(&object.extension_headers),
+        "extension_headers": key_value_pairs_to_vec(&object.extension_headers.0),
         // TODO send object_playload itself
         "object_payload_length": object.payload_length,
     });
@@ -690,7 +689,7 @@ fn object_datagram_to_json(datagram: &data::Datagram) -> JsonValue {
     });
 
     if let Some(extension_headers) = &datagram.extension_headers {
-        json["extension_headers"] = json!(key_value_pairs_to_vec(extension_headers));
+        json["extension_headers"] = json!(key_value_pairs_to_vec(&extension_headers.0));
     }
 
     if let Some(status) = datagram.status {

@@ -1,5 +1,5 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
-use crate::data::{ObjectStatus, StreamHeaderType};
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
+use crate::data::{ExtensionHeaders, ObjectStatus, StreamHeaderType};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SubgroupHeader {
@@ -241,7 +241,7 @@ impl Encode for SubgroupObject {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SubgroupObjectExt {
     pub object_id_delta: u64,
-    pub extension_headers: KeyValuePairs,
+    pub extension_headers: ExtensionHeaders,
     pub payload_length: usize,
     pub status: Option<ObjectStatus>,
     //pub payload: bytes::Bytes,  // TODO SLG - payload is sent outside this right now - decide which way to go
@@ -260,7 +260,7 @@ impl Decode for SubgroupObjectExt {
             object_id_delta
         );
 
-        let extension_headers = KeyValuePairs::decode(r)?;
+        let extension_headers = ExtensionHeaders::decode(r)?;
         log::trace!(
             "[DECODE] SubgroupObjectExt: extension_headers={:?}",
             extension_headers
@@ -376,12 +376,12 @@ mod tests {
         let mut buf = BytesMut::new();
 
         // One ExtensionHeader for testing
-        let mut kvps = KeyValuePairs::new();
-        kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
+        let mut ext_hdrs = ExtensionHeaders::new();
+        ext_hdrs.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
 
         let msg = SubgroupObjectExt {
             object_id_delta: 0,
-            extension_headers: kvps,
+            extension_headers: ext_hdrs,
             payload_length: 7,
             status: None,
         };

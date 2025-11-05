@@ -89,7 +89,7 @@ mod tests {
                 0x21, // Type
                 0x00, 0x0c, // Length
                 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0E, // Version DRAFT_14 (0xff00000E)
-                0x03, // 3 bytes of Params
+                0x01, // 1 Param
                 0x02, 0x43, 0xe8, // Key=2 (MaxRequestId), Value=1000
             ]
         );

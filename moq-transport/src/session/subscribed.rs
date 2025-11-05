@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
-use crate::coding::{Encode, KeyValuePairs, Location, ReasonPhrase};
+use crate::coding::{Encode, Location, ReasonPhrase};
 use crate::mlog;
 use crate::serve::{ServeError, TrackReaderMode};
 use crate::watch::State;
@@ -275,7 +275,7 @@ impl Subscribed {
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
             let subgroup_object = data::SubgroupObjectExt {
                 object_id_delta: 0, // before delta logic, used to be subgroup_object_reader.object_id,
-                extension_headers: KeyValuePairs::new(), // TODO SLG - empty for now
+                extension_headers: data::ExtensionHeaders::new(), // TODO SLG - empty for now
                 payload_length: subgroup_object_reader.size,
                 status: if subgroup_object_reader.size == 0 {
                     // Only set status if payload length is zero
