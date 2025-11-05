@@ -58,11 +58,19 @@ impl Decode for KeyValuePair {
         if key % 2 == 0 {
             // VarInt variant
             let value = u64::decode(r)?;
+            log::trace!("[KVP] Decoded even key={}, value={}", key, value);
             Ok(KeyValuePair::new_int(key, value))
         } else {
             // Bytes variant
             let length = usize::decode(r)?;
+            log::trace!("[KVP] Decoded odd key={}, length={}", key, length);
             if length > u16::MAX as usize {
+                log::error!(
+                    "[KVP] Length exceeded! key={}, length={} (max={})",
+                    key,
+                    length,
+                    u16::MAX
+                );
                 return Err(DecodeError::KeyValuePairLengthExceeded());
             }
 
