@@ -57,7 +57,7 @@ pub enum DecodeError {
 
     // TODO move these to ParamError
     #[error("duplicate parameter: {0:?}")]
-    DupliateParameter(u64),
+    DuplicateParameter(u64),
 
     #[error("missing parameter")]
     MissingParameter,
