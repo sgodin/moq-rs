@@ -144,7 +144,7 @@ impl Decode for KeyValuePairs {
         for _ in 0..count {
             let kvp = KeyValuePair::decode(&mut r)?;
             if kvps.contains_key(&kvp.key) {
-                return Err(DecodeError::DupliateParameter);
+                return Err(DecodeError::DuplicateParameter(kvp.key));
             }
             kvps.insert(kvp.key, kvp);
         }

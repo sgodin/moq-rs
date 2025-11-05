@@ -4,7 +4,7 @@ kill_timeout = 5
 
 [env]
 PORT = "443"
-RUST_LOG="info"
+RUST_LOG="trace"
 # Qlog files for debugging (ephemeral - lost on restart)
 QLOG_DIR="/tmp/qlog"
 # Mlog files for MoQ Transport debugging (ephemeral - lost on restart)
