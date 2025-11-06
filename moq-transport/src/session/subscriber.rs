@@ -436,12 +436,12 @@ impl Subscriber {
 
                         // Check for Immutable Extensions (type 0xB = 11)
                         if object.extension_headers.has(0xB) {
-                            log::warn!(
-                                "[SUBSCRIBER] recv_subgroup: object #{} contains IMMUTABLE EXTENSIONS (type 0xB) - currently not forwarded/processed",
+                            log::info!(
+                                "[SUBSCRIBER] recv_subgroup: object #{} contains IMMUTABLE EXTENSIONS (type 0xB) - will be forwarded",
                                 object_count + 1
                             );
                             if let Some(immutable_ext) = object.extension_headers.get(0xB) {
-                                log::info!(
+                                log::debug!(
                                     "[SUBSCRIBER] recv_subgroup: immutable extension details: {:?}",
                                     immutable_ext
                                 );
@@ -491,6 +491,11 @@ impl Subscriber {
             // Calculate absolute object_id from delta
             current_object_id += object_id_delta;
 
+            // Extract extension headers if present
+            let extension_headers = decoded_object
+                .as_ref()
+                .map(|obj| obj.extension_headers.clone());
+
             // Log subgroup object parsed/received
             if let Some(ref mlog) = mlog {
                 if let Ok(mut mlog_guard) = mlog.lock() {
@@ -525,9 +530,10 @@ impl Subscriber {
                 }
             }
 
-            // TODO SLG - object_id_delta, extension headers and object status are being ignored and not passed on
+            // Pass extension headers through to the serve layer
+            // TODO SLG - object_id_delta and object status are still being ignored
 
-            let mut object_writer = subgroup_writer.create(remaining_bytes)?;
+            let mut object_writer = subgroup_writer.create(remaining_bytes, extension_headers)?;
             log::trace!(
                 "[SUBSCRIBER] recv_subgroup: reading payload for object #{} ({} bytes)",
                 object_count + 1,
@@ -602,11 +608,11 @@ impl Subscriber {
 
             // Check for Immutable Extensions (type 0xB = 11)
             if ext_headers.has(0xB) {
-                log::warn!(
-                    "[SUBSCRIBER] recv_datagram: datagram contains IMMUTABLE EXTENSIONS (type 0xB) - currently not forwarded/processed"
+                log::info!(
+                    "[SUBSCRIBER] recv_datagram: datagram contains IMMUTABLE EXTENSIONS (type 0xB)"
                 );
                 if let Some(immutable_ext) = ext_headers.get(0xB) {
-                    log::info!(
+                    log::debug!(
                         "[SUBSCRIBER] recv_datagram: immutable extension details: {:?}",
                         immutable_ext
                     );

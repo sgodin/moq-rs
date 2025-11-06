@@ -275,7 +275,7 @@ impl Subscribed {
         while let Some(mut subgroup_object_reader) = subgroup_reader.next().await? {
             let subgroup_object = data::SubgroupObjectExt {
                 object_id_delta: 0, // before delta logic, used to be subgroup_object_reader.object_id,
-                extension_headers: data::ExtensionHeaders::new(), // TODO SLG - empty for now
+                extension_headers: subgroup_object_reader.extension_headers.clone(), // Pass through extension headers
                 payload_length: subgroup_object_reader.size,
                 status: if subgroup_object_reader.size == 0 {
                     // Only set status if payload length is zero
@@ -286,12 +286,13 @@ impl Subscribed {
             };
 
             log::debug!(
-                "[PUBLISHER] serve_subgroup: sending object #{} - object_id={}, object_id_delta={}, payload_length={}, status={:?}",
+                "[PUBLISHER] serve_subgroup: sending object #{} - object_id={}, object_id_delta={}, payload_length={}, status={:?}, extension_headers={:?}",
                 object_count + 1,
                 subgroup_object_reader.object_id,
                 subgroup_object.object_id_delta,
                 subgroup_object.payload_length,
-                subgroup_object.status
+                subgroup_object.status,
+                subgroup_object.extension_headers
             );
 
             writer.encode(&subgroup_object).await?;
