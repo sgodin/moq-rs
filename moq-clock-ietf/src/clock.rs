@@ -65,6 +65,7 @@ impl Publisher {
                         object_id: 0,
                         priority: 127,
                         payload: time_str.clone().into_bytes().into(),
+                        extension_headers: Default::default(),
                     })
                     .context("failed to write datagram")?;
 

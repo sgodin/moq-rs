@@ -38,6 +38,10 @@ impl ExtensionHeaders {
     pub fn get(&self, key: u64) -> Option<&KeyValuePair> {
         self.0.iter().find(|k| k.key == key)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Decode for ExtensionHeaders {

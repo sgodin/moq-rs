@@ -117,13 +117,15 @@ impl DatagramsReader {
 }
 
 /// Static information about the datagram.
-/// TODO SLG - update with new data from draft-13
 #[derive(Clone)]
 pub struct Datagram {
     pub group_id: u64,
     pub object_id: u64,
     pub priority: u8,
     pub payload: bytes::Bytes,
+
+    // Extension headers (for draft-14 compliance, particularly immutable extensions)
+    pub extension_headers: crate::data::ExtensionHeaders,
 }
 
 impl fmt::Debug for Datagram {
@@ -133,6 +135,7 @@ impl fmt::Debug for Datagram {
             .field("group_id", &self.group_id)
             .field("priority", &self.priority)
             .field("payload", &self.payload.len())
+            .field("extension_headers", &self.extension_headers)
             .finish()
     }
 }

@@ -229,6 +229,7 @@ impl SubscribeRecv {
                     object_id: datagram.object_id.unwrap_or(0),
                     priority: datagram.publisher_priority,
                     payload: datagram.payload.unwrap_or_default(),
+                    extension_headers: datagram.extension_headers.unwrap_or_default(),
                 })?;
                 self.writer = Some(TrackWriterMode::Datagrams(datagrams));
                 Ok(())
@@ -239,6 +240,7 @@ impl SubscribeRecv {
                     object_id: datagram.object_id.unwrap_or(0),
                     priority: datagram.publisher_priority,
                     payload: datagram.payload.unwrap_or_default(),
+                    extension_headers: datagram.extension_headers.unwrap_or_default(),
                 })?;
                 self.writer = Some(TrackWriterMode::Datagrams(datagrams));
                 Ok(())

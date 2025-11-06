@@ -363,13 +363,25 @@ impl Subscribed {
 
         let mut datagram_count = 0;
         while let Some(datagram) = datagrams.read().await? {
+            // Determine datagram type based on extension headers presence
+            let has_extension_headers = !datagram.extension_headers.is_empty();
+            let datagram_type = if has_extension_headers {
+                data::DatagramType::ObjectIdPayloadExt
+            } else {
+                data::DatagramType::ObjectIdPayload
+            };
+
             let encoded_datagram = data::Datagram {
-                datagram_type: data::DatagramType::ObjectIdPayload, // TODO SLG
+                datagram_type,
                 track_alias: self.info.id, // use subscription id as track_alias
                 group_id: datagram.group_id,
                 object_id: Some(datagram.object_id),
                 publisher_priority: datagram.priority,
-                extension_headers: None,
+                extension_headers: if has_extension_headers {
+                    Some(datagram.extension_headers.clone())
+                } else {
+                    None
+                },
                 status: None,
                 payload: Some(datagram.payload),
             };
@@ -383,13 +395,14 @@ impl Subscribed {
             encoded_datagram.encode(&mut buffer)?;
 
             log::debug!(
-                "[PUBLISHER] serve_datagrams: sending datagram #{} - track_alias={}, group_id={}, object_id={}, priority={}, payload_len={}, total_encoded_len={}",
+                "[PUBLISHER] serve_datagrams: sending datagram #{} - track_alias={}, group_id={}, object_id={}, priority={}, payload_len={}, extension_headers={:?}, total_encoded_len={}",
                 datagram_count + 1,
                 encoded_datagram.track_alias,
                 encoded_datagram.group_id,
                 encoded_datagram.object_id.unwrap(),
                 encoded_datagram.publisher_priority,
                 payload_len,
+                encoded_datagram.extension_headers,
                 buffer.len()
             );
 
