@@ -81,17 +81,17 @@ mod tests {
             params,
         };
         client.encode(&mut buf).unwrap();
+
+        #[rustfmt::skip]
         assert_eq!(
             buf.to_vec(),
             vec![
                 0x20, // Type
                 0x00, 0x14, // Length
                 0x01, // 1 Version
-                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
-                0x0D, // Version DRAFT_13 (0xff00000D)
+                0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x0D, // Version DRAFT_13 (0xff00000D)
                 0x01, // 1 Param
-                0x01, 0x08, 0x74, 0x65, 0x73, 0x74, 0x70, 0x61, 0x74,
-                0x68, // Key=1 (Path), Value="testpath"
+                0x01, 0x08, 0x74, 0x65, 0x73, 0x74, 0x70, 0x61, 0x74, 0x68, // Key=1 (Path), Value="testpath"
             ]
         );
         let decoded = Client::decode(&mut buf).unwrap();

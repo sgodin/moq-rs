@@ -1,5 +1,4 @@
 use crate::coding::{Decode, DecodeError, Encode, EncodeError};
-use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, Eq, PartialEq)]
@@ -115,46 +114,52 @@ impl fmt::Debug for KeyValuePair {
     }
 }
 
+/// A collection of KeyValuePair entries, where the number of key-value-pairs are encoded/decoded first.
+/// This structure is appropriate for Control message parameters.
+/// Since duplicate parameters are allowed for unknown parameters, we don't do duplicate checking here.
 #[derive(Default, Clone, Eq, PartialEq)]
-pub struct KeyValuePairs(pub HashMap<u64, KeyValuePair>);
+pub struct KeyValuePairs(pub Vec<KeyValuePair>);
 
+// TODO: These set/get API's all assume no duplicate keys. We can add API's to support duplicates if needed.
 impl KeyValuePairs {
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Insert or replace a KeyValuePair with the same key.
     pub fn set(&mut self, kvp: KeyValuePair) {
-        self.0.insert(kvp.key, kvp);
+        if let Some(existing) = self.0.iter_mut().find(|k| k.key == kvp.key) {
+            *existing = kvp;
+        } else {
+            self.0.push(kvp);
+        }
     }
 
     pub fn set_intvalue(&mut self, key: u64, value: u64) {
-        self.0.insert(key, KeyValuePair::new_int(key, value));
+        self.set(KeyValuePair::new_int(key, value));
     }
 
     pub fn set_bytesvalue(&mut self, key: u64, value: Vec<u8>) {
-        self.0.insert(key, KeyValuePair::new_bytes(key, value));
+        self.set(KeyValuePair::new_bytes(key, value));
     }
 
     pub fn has(&self, key: u64) -> bool {
-        self.0.contains_key(&key)
+        self.0.iter().any(|k| k.key == key)
     }
 
-    pub fn get(&mut self, key: u64) -> Option<&KeyValuePair> {
-        self.0.get(&key)
+    pub fn get(&self, key: u64) -> Option<&KeyValuePair> {
+        self.0.iter().find(|k| k.key == key)
     }
 }
 
 impl Decode for KeyValuePairs {
     fn decode<R: bytes::Buf>(mut r: &mut R) -> Result<Self, DecodeError> {
-        let mut kvps = HashMap::new();
+        let mut kvps = Vec::new();
 
         let count = u64::decode(r)?;
         for _ in 0..count {
             let kvp = KeyValuePair::decode(&mut r)?;
-            if kvps.contains_key(&kvp.key) {
-                return Err(DecodeError::DuplicateParameter(kvp.key));
-            }
-            kvps.insert(kvp.key, kvp);
+            kvps.push(kvp);
         }
 
         Ok(KeyValuePairs(kvps))
@@ -165,8 +170,8 @@ impl Encode for KeyValuePairs {
     fn encode<W: bytes::BufMut>(&self, w: &mut W) -> Result<(), EncodeError> {
         self.0.len().encode(w)?;
 
-        for kvpi in self.0.iter() {
-            kvpi.1.encode(w)?;
+        for kvp in &self.0 {
+            kvp.encode(w)?;
         }
 
         Ok(())
@@ -176,8 +181,7 @@ impl Encode for KeyValuePairs {
 impl fmt::Debug for KeyValuePairs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ ")?;
-        let pairs: Vec<_> = self.0.iter().collect();
-        for (i, (_key, kv)) in pairs.iter().enumerate() {
+        for (i, kv) in self.0.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }
@@ -261,9 +265,7 @@ mod tests {
         kvps.set_bytesvalue(1, vec![0x01, 0x02, 0x03, 0x04, 0x05]);
         kvps.encode(&mut buf).unwrap();
         let buf_vec = buf.to_vec();
-        // Note:  Since KeyValuePairs is a HashMap, the order of KeyValuePairs in
-        //        the encoded buffer is not guaranteed, so we can't validate the entire buffer,
-        //        just validate the ecncoded length and the KeyValuePair count.
+        //  Validate the encoded length and the KeyValuePair count
         assert_eq!(14, buf_vec.len()); // 14 bytes total
         assert_eq!(3, buf_vec[0]); // 3 KeyValuePairs
         let decoded = KeyValuePairs::decode(&mut buf).unwrap();

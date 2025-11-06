@@ -1,5 +1,5 @@
-use crate::coding::{Decode, DecodeError, Encode, EncodeError, KeyValuePairs};
-use crate::data::ObjectStatus;
+use crate::coding::{Decode, DecodeError, Encode, EncodeError};
+use crate::data::{ExtensionHeaders, ObjectStatus};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DatagramType {
@@ -59,7 +59,7 @@ pub struct Datagram {
     pub publisher_priority: u8,
 
     /// Optional extension headers if type is 0x1 (NoEndOfGroupWithExtensions) or 0x3 (EndofGroupWithExtensions)
-    pub extension_headers: Option<KeyValuePairs>,
+    pub extension_headers: Option<ExtensionHeaders>,
 
     /// The Object Status.
     pub status: Option<ObjectStatus>,
@@ -93,7 +93,7 @@ impl Decode for Datagram {
             | DatagramType::ObjectIdPayloadExtEndOfGroup
             | DatagramType::PayloadExt
             | DatagramType::PayloadExtEndOfGroup
-            | DatagramType::ObjectIdStatusExt => Some(KeyValuePairs::decode(r)?),
+            | DatagramType::ObjectIdStatusExt => Some(ExtensionHeaders::decode(r)?),
             _ => None,
         };
 
@@ -284,8 +284,8 @@ mod tests {
         let mut buf = BytesMut::new();
 
         // One ExtensionHeader for testing
-        let mut kvps = KeyValuePairs::new();
-        kvps.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
+        let mut ext_hdrs = ExtensionHeaders::new();
+        ext_hdrs.set_bytesvalue(123, vec![0x00, 0x01, 0x02, 0x03]);
 
         // DatagramType = ObjectIdPayload
         let msg = Datagram {
@@ -311,7 +311,7 @@ mod tests {
             group_id: 10,
             object_id: Some(1234),
             publisher_priority: 127,
-            extension_headers: Some(kvps.clone()),
+            extension_headers: Some(ext_hdrs.clone()),
             status: None,
             payload: Some(Bytes::from("payload")),
         };
@@ -345,7 +345,7 @@ mod tests {
             group_id: 10,
             object_id: Some(1234),
             publisher_priority: 127,
-            extension_headers: Some(kvps.clone()),
+            extension_headers: Some(ext_hdrs.clone()),
             status: None,
             payload: Some(Bytes::from("payload")),
         };
@@ -379,7 +379,7 @@ mod tests {
             group_id: 10,
             object_id: Some(1234),
             publisher_priority: 127,
-            extension_headers: Some(kvps.clone()),
+            extension_headers: Some(ext_hdrs.clone()),
             status: Some(ObjectStatus::EndOfTrack),
             payload: None,
         };
@@ -413,7 +413,7 @@ mod tests {
             group_id: 10,
             object_id: None,
             publisher_priority: 127,
-            extension_headers: Some(kvps.clone()),
+            extension_headers: Some(ext_hdrs.clone()),
             status: None,
             payload: Some(Bytes::from("payload")),
         };
@@ -447,7 +447,7 @@ mod tests {
             group_id: 10,
             object_id: None,
             publisher_priority: 127,
-            extension_headers: Some(kvps.clone()),
+            extension_headers: Some(ext_hdrs.clone()),
             status: None,
             payload: Some(Bytes::from("payload")),
         };
