@@ -424,12 +424,44 @@ impl Subscriber {
                     true => {
                         let object = reader.decode::<data::SubgroupObjectExt>().await?;
                         log::debug!(
-                        "[SUBSCRIBER] recv_subgroup: object #{} with extension headers - object_id_delta={}, payload_length={}, status={:?}",
+                        "[SUBSCRIBER] recv_subgroup: object #{} with extension headers - object_id_delta={}, payload_length={}, status={:?}, extension_headers={:?}",
                         object_count + 1,
                         object.object_id_delta,
                         object.payload_length,
-                        object.status
+                        object.status,
+                        object.extension_headers
                     );
+
+                        // Check for known draft-14 extension types
+
+                        // Check for Immutable Extensions (type 0xB = 11)
+                        if object.extension_headers.has(0xB) {
+                            log::warn!(
+                                "[SUBSCRIBER] recv_subgroup: object #{} contains IMMUTABLE EXTENSIONS (type 0xB) - currently not forwarded/processed",
+                                object_count + 1
+                            );
+                            if let Some(immutable_ext) = object.extension_headers.get(0xB) {
+                                log::info!(
+                                    "[SUBSCRIBER] recv_subgroup: immutable extension details: {:?}",
+                                    immutable_ext
+                                );
+                            }
+                        }
+
+                        // Check for Prior Group ID Gap (type 0x3C = 60)
+                        if object.extension_headers.has(0x3C) {
+                            log::info!(
+                                "[SUBSCRIBER] recv_subgroup: object #{} contains PRIOR GROUP ID GAP (type 0x3C)",
+                                object_count + 1
+                            );
+                            if let Some(gap_ext) = object.extension_headers.get(0x3C) {
+                                log::debug!(
+                                    "[SUBSCRIBER] recv_subgroup: prior group id gap details: {:?}",
+                                    gap_ext
+                                );
+                            }
+                        }
+
                         let obj_copy = object.clone();
                         (
                             object.payload_length,
@@ -556,6 +588,42 @@ impl Subscriber {
                 let stream_id = 0; // TODO: Placeholder, need actual QUIC stream ID
                 let _ =
                     mlog_guard.add_event(mlog::object_datagram_parsed(time, stream_id, &datagram));
+            }
+        }
+
+        // Check for extension headers in the datagram
+        if let Some(ref ext_headers) = datagram.extension_headers {
+            log::debug!(
+                "[SUBSCRIBER] recv_datagram: datagram contains extension headers: {:?}",
+                ext_headers
+            );
+
+            // Check for known draft-14 extension types
+
+            // Check for Immutable Extensions (type 0xB = 11)
+            if ext_headers.has(0xB) {
+                log::warn!(
+                    "[SUBSCRIBER] recv_datagram: datagram contains IMMUTABLE EXTENSIONS (type 0xB) - currently not forwarded/processed"
+                );
+                if let Some(immutable_ext) = ext_headers.get(0xB) {
+                    log::info!(
+                        "[SUBSCRIBER] recv_datagram: immutable extension details: {:?}",
+                        immutable_ext
+                    );
+                }
+            }
+
+            // Check for Prior Group ID Gap (type 0x3C = 60)
+            if ext_headers.has(0x3C) {
+                log::info!(
+                    "[SUBSCRIBER] recv_datagram: datagram contains PRIOR GROUP ID GAP (type 0x3C)"
+                );
+                if let Some(gap_ext) = ext_headers.get(0x3C) {
+                    log::debug!(
+                        "[SUBSCRIBER] recv_datagram: prior group id gap details: {:?}",
+                        gap_ext
+                    );
+                }
             }
         }
 
