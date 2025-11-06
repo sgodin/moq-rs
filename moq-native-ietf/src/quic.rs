@@ -303,12 +303,37 @@ impl Client {
         let host = url.host().context("invalid DNS name")?.to_string();
         let port = url.port().unwrap_or(443);
 
-        // Look up the DNS entry.
-        let addr = tokio::net::lookup_host((host.clone(), port))
+        // Determine whether our local socket is IPv6 or IPv4
+        let is_ipv6 = self
+            .quic
+            .local_addr()
+            .context("failed to get local address")?
+            .is_ipv6();
+
+        // Perform DNS lookup to get all addresses
+        let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host.clone(), port))
             .await
             .context("failed DNS lookup")?
-            .next()
+            .collect();
+
+        // Select DNS address to use based on local socket type and OS
+        let chosen = if !is_ipv6 {
+            // If we are bound to an IPv4 socket, prefer IPv4 addresses
+            addrs.iter().find(|a| a.is_ipv4()).cloned()
+        } else if cfg!(target_os = "linux") {
+            // If IPv6 and running on Linux (dual-stack), use top DNS result
+            addrs.first().cloned()
+        } else {
+            // Non-linux IPv6 build: prefer IPv6 only
+            addrs.iter().find(|a| a.is_ipv6()).cloned()
+        };
+
+        // Fallback to the first available address if preferred selection fails
+        let addr = chosen
+            .or_else(|| addrs.first().cloned())
             .context("no DNS entries")?;
+
+        log::info!("Connecting to address={}", addr);
 
         let connection = self.quic.connect_with(config, addr, &host)?.await?;
 
