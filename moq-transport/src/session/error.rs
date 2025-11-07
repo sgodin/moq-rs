@@ -74,8 +74,7 @@ impl SessionError {
     /// Helper for unimplemented protocol features
     /// Logs a warning and returns a NotImplemented error instead of panicking
     pub fn unimplemented(feature: &str) -> Self {
-        log::warn!("Protocol feature not implemented: {}", feature);
-        Self::Serve(serve::ServeError::NotImplemented(feature.to_string()))
+        Self::Serve(serve::ServeError::not_implemented_ctx(feature))
     }
 }
 
@@ -83,7 +82,7 @@ impl From<SessionError> for serve::ServeError {
     fn from(err: SessionError) -> Self {
         match err {
             SessionError::Serve(err) => err,
-            _ => serve::ServeError::Internal(err.to_string()),
+            _ => serve::ServeError::internal_ctx(format!("session error: {}", err)),
         }
     }
 }

@@ -136,7 +136,9 @@ impl Drop for TracksRequest {
     fn drop(&mut self) {
         // Close any tracks still in the Queue
         for track in self.incoming.take().unwrap().close() {
-            let _ = track.close(ServeError::NotFound);
+            let _ = track.close(ServeError::not_found_ctx(
+                "tracks request dropped before track handled",
+            ));
         }
     }
 }

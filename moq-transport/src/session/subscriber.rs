@@ -346,12 +346,10 @@ impl Subscriber {
                 // Look up the subscribe by id
                 let mut subscribes = self.subscribes.lock().unwrap();
                 let subscribe = subscribes.get_mut(&subscribe_id).ok_or_else(|| {
-                    log::error!(
-                        "[SUBSCRIBER] recv_stream_inner: subscribe_id={} not found, track_alias={}",
-                        subscribe_id,
-                        track_alias
-                    );
-                    ServeError::NotFound
+                    ServeError::not_found_ctx(format!(
+                        "subscribe_id={} not found for track_alias={}",
+                        subscribe_id, track_alias
+                    ))
                 })?;
 
                 // Create the appropriate writer based on the stream header type
@@ -359,21 +357,16 @@ impl Subscriber {
                     log::trace!("[SUBSCRIBER] recv_stream_inner: creating subgroup writer");
                     Writer::Subgroup(subscribe.subgroup(stream_header.subgroup_header.unwrap())?)
                 } else {
-                    log::error!(
-                        "[SUBSCRIBER] recv_stream_inner: stream header_type={} not supported",
-                        stream_header.header_type
-                    );
-                    return Err(SessionError::Serve(ServeError::Internal(format!(
+                    return Err(SessionError::Serve(ServeError::internal_ctx(format!(
                         "unsupported stream header type={}",
                         stream_header.header_type
                     ))));
                 }
             } else {
-                log::error!(
-                    "[SUBSCRIBER] recv_stream_inner: subscription track_alias={} not found",
+                return Err(SessionError::Serve(ServeError::not_found_ctx(format!(
+                    "subscription track_alias={} not found",
                     track_alias
-                );
-                return Err(SessionError::Serve(ServeError::NotFound));
+                ))));
             }
         };
 
