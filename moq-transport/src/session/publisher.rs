@@ -173,7 +173,12 @@ impl Publisher {
         ) {
             subscribed.serve(track).await?;
         } else {
-            subscribed.close(ServeError::NotFound)?;
+            let namespace = subscribed.info.track_namespace.clone();
+            let name = subscribed.info.track_name.clone();
+            subscribed.close(ServeError::not_found_ctx(format!(
+                "track '{}/{}' not found in tracks",
+                namespace, name
+            )))?;
         }
 
         Ok(())
@@ -188,7 +193,13 @@ impl Publisher {
                 track_status_request.request_msg.track_namespace.clone(),
                 &track_status_request.request_msg.track_name,
             )
-            .ok_or(ServeError::NotFound)?;
+            .ok_or_else(|| {
+                ServeError::not_found_ctx(format!(
+                    "track '{}/{}' not found for track_status",
+                    track_status_request.request_msg.track_namespace,
+                    track_status_request.request_msg.track_name
+                ))
+            })?;
 
         track_status_request.respond_ok(&track)?;
 
@@ -326,7 +337,10 @@ impl Publisher {
         // then send SubscribeError.
         if let Err(err) = self.unknown_subscribed.push(subscribed) {
             // Default to closing with a not found error I guess.
-            err.close(ServeError::NotFound)?;
+            err.close(ServeError::not_found_ctx(format!(
+                "unknown_subscribed queue full for namespace {:?}",
+                namespace
+            )))?;
         }
 
         Ok(())

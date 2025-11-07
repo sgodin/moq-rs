@@ -108,7 +108,13 @@ impl Producer {
             }
         }
 
-        Err(ServeError::NotFound.into())
+        let namespace = subscribed.track_namespace.clone();
+        let name = subscribed.track_name.clone();
+        Err(ServeError::not_found_ctx(format!(
+            "track '{}/{}' not found in local or remote tracks",
+            namespace, name
+        ))
+        .into())
     }
 
     /// Serve a track_status request.
@@ -149,6 +155,11 @@ impl Producer {
 
         track_status_requested.respond_error(4, "Track not found")?;
 
-        Err(ServeError::NotFound.into())
+        Err(ServeError::not_found_ctx(format!(
+            "track '{}/{}' not found for track_status",
+            track_status_requested.request_msg.track_namespace,
+            track_status_requested.request_msg.track_name
+        ))
+        .into())
     }
 }

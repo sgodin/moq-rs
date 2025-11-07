@@ -33,7 +33,11 @@ impl Default for AnnounceState {
 impl Drop for AnnounceState {
     fn drop(&mut self) {
         for subscriber in self.subscribers.drain(..) {
-            subscriber.close(ServeError::NotFound).ok();
+            subscriber
+                .close(ServeError::not_found_ctx(
+                    "announce dropped before subscription handled",
+                ))
+                .ok();
         }
     }
 }
