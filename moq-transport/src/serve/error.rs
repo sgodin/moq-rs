@@ -13,8 +13,8 @@ pub enum ServeError {
     #[error("not found")]
     NotFound,
 
-    #[error("not found [error:{0}]")]
-    NotFoundWithId(uuid::Uuid),
+    #[error("not found: {0} [error:{1}]")]
+    NotFoundWithId(String, uuid::Uuid),
 
     #[error("duplicate")]
     Duplicate,
@@ -51,7 +51,7 @@ impl ServeError {
             // Pass through application-specific error codes
             Self::Closed(code) => *code,
             // TRACK_DOES_NOT_EXIST (0x4) from SUBSCRIBE_ERROR codes
-            Self::NotFound | Self::NotFoundWithId(_) => 0x4,
+            Self::NotFound | Self::NotFoundWithId(_, _) => 0x4,
             // This is more of a session-level error, but keeping a reasonable code
             Self::Duplicate => 0x5,
             // NOT_SUPPORTED (0x3) - appears in multiple error code registries
@@ -66,48 +66,33 @@ impl ServeError {
     /// Create NotFound error with correlation ID and context logging.
     /// The correlation ID will be included in the error message sent to the client.
     #[track_caller]
-    pub fn not_found_ctx(context: impl std::fmt::Display) -> Self {
+    pub fn not_found_ctx(context: impl Into<String>) -> Self {
+        let context = context.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
-        log::warn!(
-            "[{}] Not found: {} at {}:{}",
-            id,
-            context,
-            loc.file(),
-            loc.line()
-        );
-        Self::NotFoundWithId(id)
+        log::warn!("[{}] Not found: {} at {}:{}", id, context, loc.file(), loc.line());
+        Self::NotFoundWithId(context, id)
     }
 
     /// Create Internal error with correlation ID and context logging.
     /// The correlation ID will be included in the error message sent to the client.
     #[track_caller]
-    pub fn internal_ctx(context: impl std::fmt::Display) -> Self {
+    pub fn internal_ctx(context: impl Into<String>) -> Self {
+        let context = context.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
-        log::error!(
-            "[{}] Internal error: {} at {}:{}",
-            id,
-            context,
-            loc.file(),
-            loc.line()
-        );
-        Self::InternalWithId(context.to_string(), id)
+        log::error!("[{}] Internal error: {} at {}:{}", id, context, loc.file(), loc.line());
+        Self::InternalWithId(context, id)
     }
 
     /// Create NotImplemented error with correlation ID and context logging.
     /// The correlation ID will be included in the error message sent to the client.
     #[track_caller]
-    pub fn not_implemented_ctx(feature: impl std::fmt::Display) -> Self {
+    pub fn not_implemented_ctx(feature: impl Into<String>) -> Self {
+        let feature = feature.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
-        log::warn!(
-            "[{}] Not implemented: {} at {}:{}",
-            id,
-            feature,
-            loc.file(),
-            loc.line()
-        );
-        Self::NotImplementedWithId(feature.to_string(), id)
+        log::warn!("[{}] Not implemented: {} at {}:{}", id, feature, loc.file(), loc.line());
+        Self::NotImplementedWithId(feature, id)
     }
 }
