@@ -63,36 +63,71 @@ impl ServeError {
         }
     }
 
-    /// Create NotFound error with correlation ID and context logging.
-    /// The correlation ID will be included in the error message sent to the client.
+    /// Create NotFound error with correlation ID but no additional context.
+    /// Uses generic messages for both logging and wire protocol.
+    /// 
+    /// Example: `ServeError::not_found_id()`
     #[track_caller]
-    pub fn not_found_ctx(context: impl Into<String>) -> Self {
-        let context = context.into();
+    pub fn not_found_id() -> Self {
+        let id = uuid::Uuid::new_v4();
+        let loc = std::panic::Location::caller();
+        log::warn!("[{}] Not found at {}:{}", id, loc.file(), loc.line());
+        Self::NotFoundWithId("Track not found".to_string(), id)
+    }
+
+    /// Create NotFound error with correlation ID and internal context.
+    /// The internal context is logged but a generic message is sent on the wire.
+    /// 
+    /// Example: `ServeError::not_found_ctx("subscribe_id=123 not in map")`
+    #[track_caller]
+    pub fn not_found_ctx(internal_context: impl Into<String>) -> Self {
+        let context = internal_context.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
         log::warn!("[{}] Not found: {} at {}:{}", id, context, loc.file(), loc.line());
-        Self::NotFoundWithId(context, id)
+        Self::NotFoundWithId("Track not found".to_string(), id)
     }
 
-    /// Create Internal error with correlation ID and context logging.
-    /// The correlation ID will be included in the error message sent to the client.
+    /// Create NotFound error with full control over internal and external messages.
+    /// The internal context is logged, and the external message is sent on the wire.
+    /// 
+    /// Example: `ServeError::not_found_full("subscribe_id=123 not in map", "Subscription expired")`
     #[track_caller]
-    pub fn internal_ctx(context: impl Into<String>) -> Self {
-        let context = context.into();
+    pub fn not_found_full(
+        internal_context: impl Into<String>,
+        external_message: impl Into<String>,
+    ) -> Self {
+        let context = internal_context.into();
+        let message = external_message.into();
+        let id = uuid::Uuid::new_v4();
+        let loc = std::panic::Location::caller();
+        log::warn!("[{}] Not found: {} at {}:{}", id, context, loc.file(), loc.line());
+        Self::NotFoundWithId(message, id)
+    }
+
+    /// Create Internal error with correlation ID and internal context.
+    /// The internal context is logged but a generic message is sent on the wire.
+    /// 
+    /// Example: `ServeError::internal_ctx("subscriber map in bad state")`
+    #[track_caller]
+    pub fn internal_ctx(internal_context: impl Into<String>) -> Self {
+        let context = internal_context.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
         log::error!("[{}] Internal error: {} at {}:{}", id, context, loc.file(), loc.line());
-        Self::InternalWithId(context, id)
+        Self::InternalWithId("Internal error".to_string(), id)
     }
 
-    /// Create NotImplemented error with correlation ID and context logging.
-    /// The correlation ID will be included in the error message sent to the client.
+    /// Create NotImplemented error with correlation ID and feature context.
+    /// The feature name is logged but a generic message is sent on the wire.
+    /// 
+    /// Example: `ServeError::not_implemented_ctx("datagrams")`
     #[track_caller]
     pub fn not_implemented_ctx(feature: impl Into<String>) -> Self {
         let feature = feature.into();
         let id = uuid::Uuid::new_v4();
         let loc = std::panic::Location::caller();
         log::warn!("[{}] Not implemented: {} at {}:{}", id, feature, loc.file(), loc.line());
-        Self::NotImplementedWithId(feature, id)
+        Self::NotImplementedWithId("Feature not implemented".to_string(), id)
     }
 }
