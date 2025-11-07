@@ -341,7 +341,11 @@ impl Session {
             };
 
             // TODO GOAWAY, MAX_REQUEST_ID, REQUESTS_BLOCKED
-            unimplemented!("unknown message context: {:?}", msg)
+            log::warn!("Unimplemented message type received: {:?}", msg);
+            return Err(SessionError::unimplemented(&format!(
+                "message type {:?}",
+                msg
+            )));
         }
     }
 

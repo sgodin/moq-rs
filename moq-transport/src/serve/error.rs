@@ -24,6 +24,9 @@ pub enum ServeError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl ServeError {
@@ -37,6 +40,7 @@ impl ServeError {
             Self::Mode => 400,
             Self::Size => 413,
             Self::Internal(_) => 500,
+            Self::NotImplemented(_) => 501,
         }
     }
 }

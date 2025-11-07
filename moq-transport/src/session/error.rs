@@ -63,6 +63,13 @@ impl SessionError {
             Self::Serve(err) => err.code(),
         }
     }
+
+    /// Helper for unimplemented protocol features
+    /// Logs a warning and returns a NotImplemented error instead of panicking
+    pub fn unimplemented(feature: &str) -> Self {
+        log::warn!("Protocol feature not implemented: {}", feature);
+        Self::Serve(serve::ServeError::NotImplemented(feature.to_string()))
+    }
 }
 
 impl From<SessionError> for serve::ServeError {

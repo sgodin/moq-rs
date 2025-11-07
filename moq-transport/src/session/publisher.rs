@@ -210,11 +210,17 @@ impl Publisher {
             message::Subscriber::Subscribe(msg) => self.recv_subscribe(msg),
             message::Subscriber::SubscribeUpdate(msg) => self.recv_subscribe_update(msg),
             message::Subscriber::Unsubscribe(msg) => self.recv_unsubscribe(msg),
-            message::Subscriber::Fetch(_msg) => todo!(), // TODO
-            message::Subscriber::FetchCancel(_msg) => todo!(), // TODO
+            message::Subscriber::Fetch(_msg) => Err(SessionError::unimplemented("FETCH")),
+            message::Subscriber::FetchCancel(_msg) => {
+                Err(SessionError::unimplemented("FETCH_CANCEL"))
+            }
             message::Subscriber::TrackStatus(msg) => self.recv_track_status(msg),
-            message::Subscriber::SubscribeNamespace(_msg) => todo!(), // TODO
-            message::Subscriber::UnsubscribeNamespace(_msg) => todo!(), // TODO
+            message::Subscriber::SubscribeNamespace(_msg) => {
+                Err(SessionError::unimplemented("SUBSCRIBE_NAMESPACE"))
+            }
+            message::Subscriber::UnsubscribeNamespace(_msg) => {
+                Err(SessionError::unimplemented("UNSUBSCRIBE_NAMESPACE"))
+            }
             message::Subscriber::PublishNamespaceCancel(msg) => {
                 self.recv_publish_namespace_cancel(msg)
             }
@@ -222,8 +228,10 @@ impl Publisher {
             message::Subscriber::PublishNamespaceError(msg) => {
                 self.recv_publish_namespace_error(msg)
             }
-            message::Subscriber::PublishOk(_msg) => todo!(), // TODO
-            message::Subscriber::PublishError(_msg) => todo!(), // TODO
+            message::Subscriber::PublishOk(_msg) => Err(SessionError::unimplemented("PUBLISH_OK")),
+            message::Subscriber::PublishError(_msg) => {
+                Err(SessionError::unimplemented("PUBLISH_ERROR"))
+            }
         };
 
         if let Err(err) = res {
@@ -329,7 +337,7 @@ impl Publisher {
         _msg: message::SubscribeUpdate,
     ) -> Result<(), SessionError> {
         // TODO: Implement updating subscriptions.
-        Err(SessionError::Internal)
+        Err(SessionError::unimplemented("SUBSCRIBE_UPDATE"))
     }
 
     fn recv_track_status(&mut self, msg: message::TrackStatus) -> Result<(), SessionError> {
