@@ -44,24 +44,38 @@ pub enum SessionError {
     WrongSize,
 }
 
-// TODO SLG - update with errors from moq-transport draft-13 section 3.4 Termination
+// Session Termination Error Codes from draft-ietf-moq-transport-14 Section 13.1.1
 impl SessionError {
     /// An integer code that is sent over the wire.
+    /// Returns Session Termination Error Codes per draft-14.
     pub fn code(&self) -> u64 {
         match self {
-            Self::RoleViolation => 405,
-            Self::Session(_) => 503,
-            Self::Read(_) => 500,
-            Self::Write(_) => 500,
-            Self::Version(..) => 406,
-            Self::Decode(_) => 400,
-            Self::Encode(_) => 500,
-            Self::BoundsExceeded(_) => 500,
-            Self::Duplicate => 409,
-            Self::Internal => 500,
-            Self::WrongSize => 400,
+            // PROTOCOL_VIOLATION (0x3) - The role negotiated in the handshake was violated
+            Self::RoleViolation => 0x3,
+            // INTERNAL_ERROR (0x1) - Generic internal errors
+            Self::Session(_) => 0x1,
+            Self::Read(_) => 0x1,
+            Self::Write(_) => 0x1,
+            Self::Encode(_) => 0x1,
+            Self::BoundsExceeded(_) => 0x1,
+            Self::Internal => 0x1,
+            // VERSION_NEGOTIATION_FAILED (0x15)
+            Self::Version(..) => 0x15,
+            // PROTOCOL_VIOLATION (0x3) - Malformed messages
+            Self::Decode(_) => 0x3,
+            Self::WrongSize => 0x3,
+            // DUPLICATE_TRACK_ALIAS (0x5)
+            Self::Duplicate => 0x5,
+            // Delegate to ServeError for per-request error codes
             Self::Serve(err) => err.code(),
         }
+    }
+
+    /// Helper for unimplemented protocol features
+    /// Logs a warning and returns a NotImplemented error instead of panicking
+    pub fn unimplemented(feature: &str) -> Self {
+        log::warn!("Protocol feature not implemented: {}", feature);
+        Self::Serve(serve::ServeError::NotImplemented(feature.to_string()))
     }
 }
 

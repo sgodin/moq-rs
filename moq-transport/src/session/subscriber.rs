@@ -120,7 +120,7 @@ impl Subscriber {
                 self.drop_publish_namespace(&msg.track_namespace)
             }
             // TODO SLG - there is no longer a namespace in the error, need to map via request id
-            message::Subscriber::PublishNamespaceError(_msg) => todo!(), //self.drop_announce(&msg.track_namespace),
+            message::Subscriber::PublishNamespaceError(_msg) => {} // Not implemented yet - need request id mapping
             _ => {}
         }
 
@@ -128,27 +128,27 @@ impl Subscriber {
         let _ = self.outgoing.push(msg.into());
     }
 
-    fn not_implemented_yet(&self) -> Result<(), SessionError> {
-        Err(SessionError::Serve(ServeError::Internal(
-            "Not implemented yet".to_string(),
-        )))
-    }
-
     /// Receive a message from the publisher via the control stream.
     pub(super) fn recv_message(&mut self, msg: message::Publisher) -> Result<(), SessionError> {
         let res = match &msg {
             message::Publisher::PublishNamespace(msg) => self.recv_publish_namespace(msg),
             message::Publisher::PublishNamespaceDone(msg) => self.recv_publish_namespace_done(msg),
-            message::Publisher::Publish(_msg) => self.not_implemented_yet(), // TODO
+            message::Publisher::Publish(_msg) => Err(SessionError::unimplemented("PUBLISH")),
             message::Publisher::PublishDone(msg) => self.recv_publish_done(msg),
             message::Publisher::SubscribeOk(msg) => self.recv_subscribe_ok(msg),
             message::Publisher::SubscribeError(msg) => self.recv_subscribe_error(msg),
             message::Publisher::TrackStatusOk(msg) => self.recv_track_status_ok(msg),
-            message::Publisher::TrackStatusError(_msg) => self.not_implemented_yet(), // TODO
-            message::Publisher::FetchOk(_msg) => self.not_implemented_yet(),          // TODO
-            message::Publisher::FetchError(_msg) => self.not_implemented_yet(),       // TODO
-            message::Publisher::SubscribeNamespaceOk(_msg) => self.not_implemented_yet(), // TODO
-            message::Publisher::SubscribeNamespaceError(_msg) => self.not_implemented_yet(), // TODO
+            message::Publisher::TrackStatusError(_msg) => {
+                Err(SessionError::unimplemented("TRACK_STATUS_ERROR"))
+            }
+            message::Publisher::FetchOk(_msg) => Err(SessionError::unimplemented("FETCH_OK")),
+            message::Publisher::FetchError(_msg) => Err(SessionError::unimplemented("FETCH_ERROR")),
+            message::Publisher::SubscribeNamespaceOk(_msg) => {
+                Err(SessionError::unimplemented("SUBSCRIBE_NAMESPACE_OK"))
+            }
+            message::Publisher::SubscribeNamespaceError(_msg) => {
+                Err(SessionError::unimplemented("SUBSCRIBE_NAMESPACE_ERROR"))
+            }
         };
 
         if let Err(SessionError::Serve(err)) = res {
